@@ -1,0 +1,27 @@
+# Android Studio and IntelliJ
+.idea/
+*.iml
+.navigation/
+captures/
+
+# Gradle and build output
+.gradle/
+build/
+**/build/
+/wrapper/
+
+# Local machine configuration
+local.properties
+*.jks
+*.keystore
+
+# Firebase project-specific client configuration
+app/google-services.json
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# JVM crash logs
+hs_err_pid*.log
+replay_pid*.log

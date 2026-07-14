@@ -1,0 +1,67 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function validUser() {
+      return request.resource.data.keys().hasOnly([
+          'name', 'studentId', 'email', 'programme', 'yearOfStudy',
+          'phone', 'photoUrl', 'createdAt'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.studentId is string
+        && request.resource.data.studentId.size() <= 40
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.programme is string
+        && request.resource.data.programme.size() <= 160
+        && request.resource.data.yearOfStudy is string
+        && request.resource.data.yearOfStudy.size() <= 40
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 30
+        && request.resource.data.photoUrl is string;
+    }
+
+    function validItem() {
+      return request.resource.data.keys().hasAll([
+          'type', 'title', 'description', 'category', 'location',
+          'date', 'status', 'userId', 'contactInfo'
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.type in ['LOST', 'FOUND']
+        && request.resource.data.status in ['ACTIVE', 'RESOLVED']
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 3
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 2000
+        && request.resource.data.location is string
+        && request.resource.data.location.size() <= 300;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create, update: if ownsUser(userId) && validUser();
+      allow delete: if false;
+    }
+
+    match /items/{itemId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && validItem();
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && validItem();
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
