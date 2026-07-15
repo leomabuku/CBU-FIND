@@ -148,13 +148,10 @@ fun CreateListingScreen(
             }
             Spacer(Modifier.height(10.dp))
 
-            OutlinedTextField(
+            LocationPicker(
                 value = location,
                 onValueChange = { location = it; validationError = null },
-                label = { Text(if (itemType == ItemType.LOST) "Last seen location" else "Found location") },
-                supportingText = { Text("Building, room, landmark or nearby area") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                label = if (itemType == ItemType.LOST) "Last seen location" else "Found location"
             )
             Spacer(Modifier.height(10.dp))
             OutlinedButton(

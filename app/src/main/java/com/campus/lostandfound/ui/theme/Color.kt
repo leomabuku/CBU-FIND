@@ -2,20 +2,22 @@ package com.campus.lostandfound.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val PrimaryBlue = Color(0xFF3157D5)
-val PrimaryDarkBlue = Color(0xFF17338F)
-val SecondaryOrange = Color(0xFFFF6B5E)
-val AccentTeal = Color(0xFF00A896)
-val BackgroundLight = Color(0xFFF5F7FC)
-val SurfaceLight = Color(0xFFFFFFFF)
-val TextPrimaryLight = Color(0xFF182033)
-val TextSecondaryLight = Color(0xFF667085)
+val FindOrange = Color(0xFFFF6816)
+val FindOrangeDark = Color(0xFFD94B00)
+val FindGreen = Color(0xFF16A34A)
+val FindPurple = Color(0xFF6D3FB5)
+val FindInk = Color(0xFF101418)
+val FindIvory = Color(0xFFFFFBF4)
+val FindPaper = Color(0xFFFFFFFF)
+val FindMuted = Color(0xFF6D6965)
+val FindLine = Color(0xFFE9E0D5)
 
-val BackgroundDark = Color(0xFF101525)
-val SurfaceDark = Color(0xFF1A2238)
-val TextPrimaryDark = Color(0xFFF8FAFC)
-val TextSecondaryDark = Color(0xFF94A3B8)
+val DarkBackground = Color(0xFF090D10)
+val DarkSurface = Color(0xFF14191D)
+val DarkSurfaceVariant = Color(0xFF20262B)
+val DarkText = Color(0xFFFFFBF4)
+val DarkMuted = Color(0xFFC8C0B7)
 
-val StatusLost = Color(0xFFFF5A5F)
-val StatusFound = Color(0xFF00A896)
-val StatusResolved = Color(0xFF64748B) // Gray
+val StatusLost = FindOrange
+val StatusFound = FindGreen
+val StatusResolved = FindPurple

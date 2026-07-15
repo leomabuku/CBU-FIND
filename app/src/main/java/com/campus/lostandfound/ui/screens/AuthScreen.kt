@@ -5,6 +5,7 @@ import android.util.Patterns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -85,7 +88,7 @@ fun AuthScreen(viewModel: AuthViewModel, onLoginSuccess: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.primary)
+            .background(MaterialTheme.colorScheme.onBackground)
     ) {
         Column(
             modifier = Modifier
@@ -94,16 +97,21 @@ fun AuthScreen(viewModel: AuthViewModel, onLoginSuccess: () -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("CBU FIND", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.ExtraBold)
+            Image(
+                painter = painterResource(R.drawable.cbu_find_logo),
+                contentDescription = "CBU Find",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().height(132.dp)
+            )
             Text(
                 text = if (isRegistering) "Join the campus network" else "Find what matters.",
                 style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onPrimary,
+                color = MaterialTheme.colorScheme.background,
                 modifier = Modifier.padding(top = 18.dp, bottom = 8.dp)
             )
             Text(
                 "A trusted space for Copperbelt University students to report, match and return items.",
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .82f)
+                color = MaterialTheme.colorScheme.background.copy(alpha = .78f)
             )
             Spacer(Modifier.height(28.dp))
 

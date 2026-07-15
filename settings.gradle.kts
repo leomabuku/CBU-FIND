@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "Campus Lost and Found"
+rootProject.name = "CBU Find"
 include(":app")
