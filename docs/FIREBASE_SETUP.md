@@ -1,6 +1,6 @@
 # Firebase setup for CBU Find
 
-This guide configures the Firebase project used by the Android application: `cbu-lost-and-found`.
+This guide configures the Firebase project shared by the Android and web applications: `cbu-lost-and-found`.
 
 ## 1. Keep only client configuration in the Android project
 
@@ -37,6 +37,8 @@ Enable:
 - Email/Password
 - Google, with a project support email
 - Phone
+
+For the web messaging client, add a Web app under **Project settings → Your apps**, copy its public configuration into `web/.env.local`, and add each deployed web hostname under **Authentication → Settings → Authorized domains**.
 
 Google authentication requires the Android SHA fingerprints and the web OAuth client generated into `google-services.json`.
 
@@ -82,7 +84,7 @@ This deploys:
 - `firestore.rules`
 - `firestore.indexes.json`
 
-The indexes support reports ordered by date and filtered by report type or user. Index creation can take several minutes. The Firebase Console **Firestore → Indexes** page should eventually show each index as enabled.
+The indexes support reports ordered by date and inboxes filtered by participant and ordered by recent activity. Index creation can take several minutes. The Firebase Console **Firestore → Indexes** page should eventually show each index as enabled.
 
 Official reference: [Firebase CLI](https://firebase.google.com/docs/cli).
 
@@ -101,6 +103,14 @@ User profiles appear under:
 ```text
 Firestore Database → Data → users → {firebaseUid}
 ```
+
+Messaging data appears under:
+
+```text
+Firestore Database → Data → conversations → {conversationId} → messages
+```
+
+Only the two conversation participants can read or write those documents under the included security rules.
 
 Official reference: [Firestore offline behavior](https://firebase.google.com/docs/firestore/manage-data/enable-offline).
 
@@ -131,7 +141,7 @@ Before a public campus launch:
 - Set Google Cloud billing budget alerts if Blaze is enabled.
 - Add account deletion and privacy-policy flows.
 - Test Firestore rules with the Firebase Emulator Suite.
-- Add moderation, reporting and blocking before enabling direct user messaging.
+- Add blocking, abuse reporting, retention controls, and moderator escalation before a campus-wide messaging launch.
 
 ## Troubleshooting
 

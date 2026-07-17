@@ -20,6 +20,9 @@ class ItemDetailsViewModel(private val repository: AppRepository) : ViewModel() 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    private val _isStartingChat = MutableStateFlow(false)
+    val isStartingChat: StateFlow<Boolean> = _isStartingChat.asStateFlow()
+
     fun loadItem(itemId: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -46,6 +49,22 @@ class ItemDetailsViewModel(private val repository: AppRepository) : ViewModel() 
                 )
             } catch (e: Exception) {
                 _error.value = e.message ?: "Could not mark this report as resolved."
+            }
+        }
+    }
+
+    fun startConversation(currentUserId: String, onReady: (String) -> Unit) {
+        val currentItem = _item.value ?: return
+        if (_isStartingChat.value) return
+        viewModelScope.launch {
+            _isStartingChat.value = true
+            _error.value = null
+            try {
+                onReady(repository.startConversation(currentItem.id, currentUserId))
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Could not start a conversation."
+            } finally {
+                _isStartingChat.value = false
             }
         }
     }

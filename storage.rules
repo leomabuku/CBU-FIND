@@ -6,9 +6,16 @@ service firebase.storage {
       allow read: if request.auth != null;
       allow create, update: if request.auth != null
         && request.auth.uid == userId
-        && folder in ['profile', 'reports']
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && folder in ['profile', 'reports', 'messages']
+        && (
+          (folder in ['profile', 'reports']
+            && request.resource.size < 5 * 1024 * 1024
+            && request.resource.contentType.matches('image/.*'))
+          ||
+          (folder == 'messages'
+            && request.resource.size < 20 * 1024 * 1024
+            && request.resource.contentType.matches('(image|video)/.*|application/pdf|text/plain'))
+        );
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
   }

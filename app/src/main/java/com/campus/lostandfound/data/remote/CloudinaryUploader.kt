@@ -20,6 +20,41 @@ class CloudinaryUploader {
         userId: String,
         folder: String
     ): CloudinaryUploadResult = withContext(Dispatchers.IO) {
+        upload(
+            bytes = bytes,
+            userId = userId,
+            folder = folder,
+            fileName = "cbu-find-${UUID.randomUUID()}.jpg",
+            contentType = "image/jpeg",
+            resourceType = "image"
+        )
+    }
+
+    suspend fun uploadMedia(
+        bytes: ByteArray,
+        userId: String,
+        folder: String,
+        fileName: String,
+        contentType: String
+    ): CloudinaryUploadResult = withContext(Dispatchers.IO) {
+        upload(
+            bytes = bytes,
+            userId = userId,
+            folder = folder,
+            fileName = fileName,
+            contentType = contentType,
+            resourceType = "auto"
+        )
+    }
+
+    private fun upload(
+        bytes: ByteArray,
+        userId: String,
+        folder: String,
+        fileName: String,
+        contentType: String,
+        resourceType: String
+    ): CloudinaryUploadResult {
         val cloudName = BuildConfig.CLOUDINARY_CLOUD_NAME.trim()
         val uploadPreset = BuildConfig.CLOUDINARY_UPLOAD_PRESET.trim()
 
@@ -28,7 +63,7 @@ class CloudinaryUploader {
         }
 
         val boundary = "CampusFindBoundary${UUID.randomUUID()}"
-        val connection = (URL("https://api.cloudinary.com/v1_1/$cloudName/image/upload").openConnection() as HttpURLConnection).apply {
+        val connection = (URL("https://api.cloudinary.com/v1_1/$cloudName/$resourceType/upload").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 20_000
             readTimeout = 75_000
@@ -40,7 +75,7 @@ class CloudinaryUploader {
         val requestBody = ByteArrayOutputStream().use { output ->
             output.writeFormField(boundary, "upload_preset", uploadPreset)
             output.writeFormField(boundary, "context", "app=cbu_find|uploaded_by=$userId|kind=$folder")
-            output.writeFileField(boundary, "file", "cbu-find-${UUID.randomUUID()}.jpg", "image/jpeg", bytes)
+            output.writeFileField(boundary, "file", fileName, contentType, bytes)
             output.write("--$boundary--\r\n".toByteArray())
             output.toByteArray()
         }
@@ -60,7 +95,7 @@ class CloudinaryUploader {
         }
 
         val json = JSONObject(response)
-        CloudinaryUploadResult(
+        return CloudinaryUploadResult(
             secureUrl = json.optString("secure_url"),
             publicId = json.optString("public_id")
         ).also {

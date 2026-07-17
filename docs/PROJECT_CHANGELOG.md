@@ -194,3 +194,12 @@ Firebase billing/card validation blocked Firebase Storage activation, so image h
 - Add release signing fingerprints before producing a Play Store/release APK.
 - Configure and test App Check before enabling enforcement.
 - Run the complete manual verification checklist on a physical phone.
+
+## 2026-07-17 — Cross-platform messaging
+
+- Added participant-only Firestore conversations with real-time message subcollections and per-user read timestamps.
+- Added the Android inbox and chat screens, a Messages entry point on the home screen, and a Message report owner action on active reports.
+- Added Cloudinary chat uploads for photos, video, and files up to 20 MB with attachment previews and direct viewing.
+- Added a responsive React web client with shared Firebase sign-in, unread inboxes, report-based conversation creation, live chat, and media uploads.
+- Added the conversation composite index and security rules that restrict reads and writes to the two participants.
+- Added web/Firebase/Cloudinary setup notes for keeping both clients on the same backend.
