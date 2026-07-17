@@ -8,6 +8,8 @@ import com.campus.lostandfound.CampusLostAndFoundApp
 import com.campus.lostandfound.ui.viewmodel.AuthViewModel
 import com.campus.lostandfound.ui.viewmodel.CreateItemViewModel
 import com.campus.lostandfound.ui.viewmodel.HomeViewModel
+import com.campus.lostandfound.ui.viewmodel.InboxViewModel
+import com.campus.lostandfound.ui.viewmodel.ChatViewModel
 import com.campus.lostandfound.ui.viewmodel.ItemDetailsViewModel
 
 object AppViewModelProvider {
@@ -23,6 +25,12 @@ object AppViewModelProvider {
         }
         initializer {
             ItemDetailsViewModel(campusApplication().container.repository)
+        }
+        initializer {
+            InboxViewModel(campusApplication().container.repository)
+        }
+        initializer {
+            ChatViewModel(campusApplication().container.repository)
         }
         initializer {
             com.campus.lostandfound.ui.viewmodel.ProfileViewModel(campusApplication().container.repository)

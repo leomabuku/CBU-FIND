@@ -1,6 +1,6 @@
 # CBU Find
 
-CBU Find is a lively native Android application that helps Copperbelt University students report, discover, and return lost property. It combines a photo-led Jetpack Compose experience with Firebase authentication, live Firestore data, and practical location search—without the complexity of an in-app map.
+CBU Find helps Copperbelt University students report, discover, and return lost property across native Android and the web. Both clients share Firebase accounts, live Firestore data, private conversations, and Cloudinary-hosted media.
 
 ![CBU Find logo](app/src/main/res/drawable/cbu_find_logo.png)
 
@@ -13,11 +13,15 @@ CBU Find is a lively native Android application that helps Copperbelt University
 - Live report feeds, text search, category filters, and resolved-item filtering
 - Report ownership and returned/resolved status tracking
 - Cloudinary uploads for profile and report images
+- Private real-time inboxes and report-based conversations
+- Chat photo, video, and file attachments up to 20 MB
+- Responsive web messaging client that stays in sync with Android
 - Light and dark Material 3 themes
 
 ## Tech stack
 
 - Kotlin and Jetpack Compose
+- React, TypeScript, and Vinext for the responsive web client
 - Material 3 and Navigation Compose
 - Firebase Authentication and Cloud Firestore
 - Cloudinary unsigned image uploads
@@ -56,6 +60,18 @@ To build from a terminal:
 
 The resulting APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
+### Web messaging client
+
+The responsive web client lives in `web/`. Copy `web/.env.example` to `web/.env.local`, then fill in the public Firebase web-app configuration and the same Cloudinary cloud name/upload preset used by Android.
+
+```powershell
+cd web
+npm install
+npm run dev
+```
+
+Register the web hostname under Firebase Authentication's authorized domains. The Firebase web app must belong to the same project as the Android app so users see the same profiles and conversations everywhere.
+
 ## Firebase deployment
 
 After selecting your Firebase project, deploy the version-controlled Firestore configuration:
@@ -75,6 +91,7 @@ app/src/main/java/com/campus/lostandfound/
 ├── di/         # Application dependency container
 └── ui/         # Compose screens, theme, navigation, and view models
 docs/           # Firebase, Cloudinary, project history, and UX audit notes
+web/            # Responsive web messaging client
 ```
 
 ## Security
@@ -89,4 +106,4 @@ Bug reports and improvements are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md
 
 ## Roadmap
 
-Planned additions include in-app claims and chat, notifications, and administrator moderation.
+Planned additions include push notifications, claims, blocking/reporting, and administrator moderation.

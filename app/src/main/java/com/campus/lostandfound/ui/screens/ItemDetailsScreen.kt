@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -59,12 +60,14 @@ fun ItemDetailsScreen(
     itemId: String,
     currentUserId: String,
     viewModel: ItemDetailsViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onOpenConversation: (String) -> Unit
 ) {
     var confirmResolved by remember { mutableStateOf(false) }
     val item by viewModel.item.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val isStartingChat by viewModel.isStartingChat.collectAsStateWithLifecycle()
     LaunchedEffect(itemId) { viewModel.loadItem(itemId) }
 
     Scaffold(
@@ -150,6 +153,22 @@ fun ItemDetailsScreen(
                         Spacer(Modifier.height(16.dp))
                         Button(onClick = { confirmResolved = true }, modifier = Modifier.fillMaxWidth()) {
                             Text("Mark item as returned")
+                        }
+                    } else if (report.userId != currentUserId && report.status == ItemStatus.ACTIVE) {
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { viewModel.startConversation(currentUserId, onOpenConversation) },
+                            enabled = !isStartingChat && currentUserId.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (isStartingChat) {
+                                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.size(8.dp))
+                            } else {
+                                Icon(Icons.Default.Email, null)
+                                Spacer(Modifier.size(8.dp))
+                            }
+                            Text(if (isStartingChat) "Opening chat…" else "Message report owner")
                         }
                     }
                 }

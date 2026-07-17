@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
@@ -63,7 +64,8 @@ fun HomeDashboardScreen(
     viewModel: HomeViewModel,
     onCreateListing: () -> Unit,
     onItemClick: (String) -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit,
+    onInboxClick: () -> Unit
 ) {
     val reports by viewModel.items.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
@@ -92,6 +94,9 @@ fun HomeDashboardScreen(
                         Column(Modifier.padding(start = 10.dp).weight(1f)) {
                             Text("CBU Find", color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.titleLarge)
                             Text("Lost it? Let's find it.", color = MaterialTheme.colorScheme.background.copy(alpha = .7f))
+                        }
+                        IconButton(onClick = onInboxClick) {
+                            Icon(Icons.Default.Email, "Messages", tint = MaterialTheme.colorScheme.background)
                         }
                         IconButton(onClick = onProfileClick) {
                             Icon(Icons.Default.Person, "Profile", tint = MaterialTheme.colorScheme.background)

@@ -13,11 +13,15 @@ import com.campus.lostandfound.ui.screens.AuthScreen
 import com.campus.lostandfound.ui.screens.CreateListingScreen
 import com.campus.lostandfound.ui.screens.HomeDashboardScreen
 import com.campus.lostandfound.ui.screens.ItemDetailsScreen
+import com.campus.lostandfound.ui.screens.InboxScreen
+import com.campus.lostandfound.ui.screens.ChatScreen
 import com.campus.lostandfound.ui.screens.SplashScreen
 import com.campus.lostandfound.ui.viewmodel.AuthViewModel
 import com.campus.lostandfound.ui.viewmodel.CreateItemViewModel
 import com.campus.lostandfound.ui.viewmodel.HomeViewModel
 import com.campus.lostandfound.ui.viewmodel.ItemDetailsViewModel
+import com.campus.lostandfound.ui.viewmodel.InboxViewModel
+import com.campus.lostandfound.ui.viewmodel.ChatViewModel
 
 @Composable
 fun CampusApp() {
@@ -50,7 +54,8 @@ fun CampusApp() {
                 viewModel = homeViewModel,
                 onCreateListing = { navController.navigate("create_listing") },
                 onItemClick = { itemId -> navController.navigate("item_details/$itemId") },
-                onProfileClick = { navController.navigate("profile") }
+                onProfileClick = { navController.navigate("profile") },
+                onInboxClick = { navController.navigate("inbox") }
             )
         }
         composable("create_listing") {
@@ -71,6 +76,29 @@ fun CampusApp() {
                 itemId = itemId,
                 currentUserId = currentUser?.id ?: "",
                 viewModel = itemDetailsViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenConversation = { conversationId -> navController.navigate("chat/$conversationId") }
+            )
+        }
+        composable("inbox") {
+            val inboxViewModel: InboxViewModel = viewModel(factory = AppViewModelProvider.Factory)
+            InboxScreen(
+                currentUserId = currentUser?.id ?: "",
+                viewModel = inboxViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onConversationClick = { conversationId -> navController.navigate("chat/$conversationId") }
+            )
+        }
+        composable(
+            route = "chat/{conversationId}",
+            arguments = listOf(navArgument("conversationId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val conversationId = backStackEntry.arguments?.getString("conversationId") ?: ""
+            val chatViewModel: ChatViewModel = viewModel(factory = AppViewModelProvider.Factory)
+            ChatScreen(
+                conversationId = conversationId,
+                currentUserId = currentUser?.id ?: "",
+                viewModel = chatViewModel,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
