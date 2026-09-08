@@ -11,13 +11,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class HomeViewModel(private val repository: AppRepository) : ViewModel() {
 
-    val syncState: StateFlow<SyncState> = repository.syncState
+    private val _syncState = MutableStateFlow(SyncState())
+    val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
@@ -31,12 +34,16 @@ class HomeViewModel(private val repository: AppRepository) : ViewModel() {
     private val _showResolved = MutableStateFlow(false)
     val showResolved: StateFlow<Boolean> = _showResolved
 
-    private val sourceItems = combine(_searchQuery, _selectedTab) { query, type -> query to type }
+    private val _role = MutableStateFlow("USER")
+    val role: StateFlow<String> = _role.asStateFlow()
+
+    private val refreshNonce = MutableStateFlow(0)
+    private val sourceItems = combine(_searchQuery, _selectedTab, refreshNonce) { query, type, _ -> query to type }
         .flatMapLatest { (query, type) ->
         if (query.isBlank()) {
-            repository.getItemsByType(type)
+            repository.getItemsByType(type) { _syncState.value = it }
         } else {
-            repository.searchItems(query, type)
+            repository.searchItems(query, type) { _syncState.value = it }
         }
     }
 
@@ -70,4 +77,11 @@ class HomeViewModel(private val repository: AppRepository) : ViewModel() {
     fun onShowResolvedChange(show: Boolean) {
         _showResolved.value = show
     }
+
+    fun loadRole(userId: String) {
+        if (userId.isBlank()) { _role.value = "USER"; return }
+        viewModelScope.launch { _role.value = runCatching { repository.getRole(userId) }.getOrDefault("USER") }
+    }
+
+    fun retry() { refreshNonce.value += 1 }
 }

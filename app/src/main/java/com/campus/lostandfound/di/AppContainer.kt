@@ -2,8 +2,10 @@ package com.campus.lostandfound.di
 
 import android.content.Context
 import com.campus.lostandfound.data.remote.CloudinaryUploader
+import com.campus.lostandfound.data.remote.WorkerApiClient
 import com.campus.lostandfound.data.repository.AppRepository
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
@@ -18,11 +20,15 @@ class AppContainer(private val context: Context) {
         Firebase.firestore
     }
 
+    val workerApi: WorkerApiClient by lazy {
+        WorkerApiClient(auth, FirebaseAppCheck.getInstance())
+    }
+
     val cloudinaryUploader: CloudinaryUploader by lazy {
-        CloudinaryUploader()
+        CloudinaryUploader(workerApi)
     }
 
     val repository: AppRepository by lazy {
-        AppRepository(context, firestore, cloudinaryUploader)
+        AppRepository(context, firestore, cloudinaryUploader, workerApi)
     }
 }

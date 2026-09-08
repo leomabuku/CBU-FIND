@@ -5,18 +5,25 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import com.campus.lostandfound.data.model.ChatAttachment
 import com.campus.lostandfound.data.model.ChatMessage
+import com.campus.lostandfound.data.model.Claim
+import com.campus.lostandfound.data.model.ClaimStatus
 import com.campus.lostandfound.data.model.Conversation
-import com.campus.lostandfound.data.remote.CloudinaryUploader
-import com.campus.lostandfound.data.util.ImageCompressor
 import com.campus.lostandfound.data.model.Item
 import com.campus.lostandfound.data.model.ItemStatus
 import com.campus.lostandfound.data.model.ItemType
+import com.campus.lostandfound.data.model.MediaAsset
+import com.campus.lostandfound.data.model.MessageMediaType
+import com.campus.lostandfound.data.model.ModerationCase
 import com.campus.lostandfound.data.model.User
+import com.campus.lostandfound.data.remote.ApiFailure
+import com.campus.lostandfound.data.remote.CloudinaryUploader
+import com.campus.lostandfound.data.remote.WorkerApiClient
+import com.campus.lostandfound.data.util.ImageCompressor
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.TransactionOptions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -26,93 +33,113 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class SyncState(
+    val isLoading: Boolean = true,
     val isFromCache: Boolean = true,
     val hasPendingWrites: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val errorCode: String? = null,
+    val referenceId: String? = null
 ) {
-    val isOnline: Boolean get() = !isFromCache && error == null
+    val isOnline: Boolean get() = !isLoading && !isFromCache && error == null
 }
+
+data class ClaimActionResult(val status: ClaimStatus, val conversationId: String? = null)
 
 class AppRepository(
     private val context: Context,
     private val firestore: FirebaseFirestore,
-    private val cloudinaryUploader: CloudinaryUploader
+    private val cloudinaryUploader: CloudinaryUploader,
+    private val api: WorkerApiClient
 ) {
-    private val usersCollection = firestore.collection("users")
-    private val itemsCollection = firestore.collection("items")
-    private val conversationsCollection = firestore.collection("conversations")
-    private val transactionOptions = TransactionOptions.Builder().setMaxAttempts(1).build()
+    private val users = firestore.collection("users")
+    private val items = firestore.collection("items")
+    private val conversations = firestore.collection("conversations")
+    private val claims = firestore.collection("claims")
+    private val moderationCases = firestore.collection("moderationCases")
     private val _syncState = MutableStateFlow(SyncState())
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
 
-    suspend fun registerUser(user: User): String = serverConfirmed("create your profile") {
-        val doc = usersCollection.document(user.id)
-        firestore.runTransaction(transactionOptions) { transaction ->
-            val existing = transaction.get(doc)
-            if (!existing.exists()) transaction.set(doc, user)
-        }.await()
+    suspend fun registerUser(user: User): String = trusted("create your profile") {
+        api.request("/v1/profile/bootstrap", body = user.profileJson())
         user.id
     }
 
-    suspend fun updateUser(user: User) = serverConfirmed("update your profile") {
-        val doc = usersCollection.document(user.id)
-        firestore.runTransaction(transactionOptions) { transaction ->
-            transaction.set(doc, user)
-        }.await()
+    suspend fun updateUser(user: User) = trusted("update your profile") {
+        api.request("/v1/profile", "PATCH", user.profileJson())
         Unit
     }
 
     suspend fun getUserById(userId: String): User? = withTimeout(12_000) {
-        usersCollection.document(userId).get().await().toObject(User::class.java)
+        users.document(userId).get().await().toObject(User::class.java)
     }
 
-    suspend fun insertItem(item: Item): String = serverConfirmed("publish this report") {
-        val doc = itemsCollection.document()
-        val newItem = item.copy(id = doc.id)
-        firestore.runTransaction(transactionOptions) { transaction -> transaction.set(doc, newItem) }.await()
-        doc.id
+    suspend fun insertItem(item: Item): String = trusted("publish this report") {
+        api.request("/v1/reports", body = item.reportJson()).getString("id")
     }
 
-    suspend fun markItemResolved(itemId: String) = serverConfirmed("update this report") {
-        val doc = itemsCollection.document(itemId)
-        firestore.runTransaction(transactionOptions) { transaction ->
-            transaction.update(
-                doc,
-                mapOf("status" to ItemStatus.RESOLVED.name, "resolvedAt" to System.currentTimeMillis())
-            )
-        }.await()
+    suspend fun markItemResolved(itemId: String) = trusted("update this report") {
+        api.request("/v1/reports/$itemId/status", body = JSONObject().put("status", ItemStatus.RESOLVED.name))
         Unit
     }
 
-    suspend fun uploadImage(uri: Uri, userId: String, folder: String): String = try {
-        withTimeout(75_000) {
-            val bytes = withContext(Dispatchers.IO) {
-                ImageCompressor.compressToJpeg(context, uri)
-            }
-            cloudinaryUploader.uploadImage(bytes, userId, folder).secureUrl
-        }
-    } catch (e: Exception) {
-        val detail = if (e is TimeoutCancellationException) "The upload timed out." else e.message.orEmpty()
-        val guidance = when {
-            "not configured" in detail.lowercase() ->
-                "Cloudinary is not configured yet."
-            "upload preset" in detail.lowercase() ->
-                "Confirm your Cloudinary upload preset is unsigned and enabled."
-            "cloud" in detail.lowercase() ->
-                "Confirm your Cloudinary cloud name."
-            else -> "Confirm Cloudinary is reachable and your unsigned upload preset allows image uploads."
-        }
-        throw IllegalStateException(
-            "Image upload failed. $guidance $detail"
-        )
+    suspend fun reopenItem(itemId: String) = trusted("reopen this report") {
+        api.request("/v1/reports/$itemId/status", body = JSONObject().put("status", ItemStatus.ACTIVE.name))
+        Unit
     }
 
-    suspend fun uploadChatMedia(uri: Uri, userId: String): ChatAttachment = try {
+    suspend fun createClaim(item: Item, note: String = ""): String = trusted("submit your claim") {
+        api.request(
+            "/v1/claims",
+            body = JSONObject().put("itemId", item.id).put("kind", if (item.type == ItemType.LOST) "FOUND_IT" else "THIS_IS_MINE").put("note", note.trim())
+        ).getString("id")
+    }
+
+    suspend fun actOnClaim(claimId: String, action: String): ClaimActionResult = trusted("update this claim") {
+        val result = api.request("/v1/claims/$claimId/action", body = JSONObject().put("action", action))
+        val status = runCatching { ClaimStatus.valueOf(result.getString("status")) }
+            .getOrElse { throw IllegalStateException("The server returned an invalid claim status. Reference: ANDROID-CLAIM-STATUS") }
+        ClaimActionResult(status, result.optString("conversationId").ifBlank { null })
+    }
+
+    fun getClaims(userId: String, onSync: (SyncState) -> Unit = {}): Flow<List<Claim>> = callbackFlow {
+        publishSync(SyncState(isLoading = true), onSync)
+        var incoming: List<Claim> = emptyList()
+        var outgoing: List<Claim> = emptyList()
+        var incomingReady = false
+        var outgoingReady = false
+        var incomingFromCache = true
+        var outgoingFromCache = true
+        var incomingPending = false
+        var outgoingPending = false
+        var terminalError: SyncState? = null
+        fun publish() { trySend((incoming + outgoing).distinctBy { it.id }.sortedByDescending { it.updatedAt }) }
+        fun publishState() {
+            val state = terminalError ?: if (incomingReady && outgoingReady) SyncState(isLoading = false, isFromCache = incomingFromCache || outgoingFromCache, hasPendingWrites = incomingPending || outgoingPending) else SyncState(isLoading = true)
+            publishSync(state, onSync)
+        }
+        val incomingListener = claims.whereEqualTo("itemOwnerId", userId).orderBy("updatedAt", Query.Direction.DESCENDING)
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error -> if (error != null) { terminalError = syncFailure(error); publishState() } else if (snapshot != null) { incoming = snapshot.documents.map { Claim.fromFirestore(it.id, it.data.orEmpty()) }; incomingReady = true; incomingFromCache = snapshot.metadata.isFromCache; incomingPending = snapshot.metadata.hasPendingWrites(); publishState(); publish() } }
+        val outgoingListener = claims.whereEqualTo("claimantId", userId).orderBy("updatedAt", Query.Direction.DESCENDING)
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error -> if (error != null) { terminalError = syncFailure(error); publishState() } else if (snapshot != null) { outgoing = snapshot.documents.map { Claim.fromFirestore(it.id, it.data.orEmpty()) }; outgoingReady = true; outgoingFromCache = snapshot.metadata.isFromCache; outgoingPending = snapshot.metadata.hasPendingWrites(); publishState(); publish() } }
+        awaitClose { incomingListener.remove(); outgoingListener.remove() }
+    }
+
+    suspend fun uploadImage(uri: Uri, folder: String): MediaAsset = try {
+        withTimeout(75_000) {
+            val bytes = withContext(Dispatchers.IO) { ImageCompressor.compressToJpeg(context, uri) }
+            cloudinaryUploader.uploadImage(bytes, folder).toMediaAsset()
+        }
+    } catch (error: Exception) {
+        throw uploadFailure(error)
+    }
+
+    suspend fun uploadChatMedia(uri: Uri): ChatAttachment = try {
         withTimeout(90_000) {
             val resolver = context.contentResolver
             val contentType = resolver.getType(uri).orEmpty().ifBlank { "application/octet-stream" }
@@ -120,229 +147,180 @@ class AppRepository(
                 if (!cursor.moveToFirst()) null else {
                     val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                     val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-                    val name = if (nameIndex >= 0) cursor.getString(nameIndex) else null
-                    val size = if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else -1L
-                    (name ?: "attachment") to size
+                    (if (nameIndex >= 0) cursor.getString(nameIndex) else "attachment") to (if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else -1L)
                 }
             } ?: ("attachment" to -1L)
-
-            require(reportedSize <= CHAT_MEDIA_MAX_BYTES || reportedSize < 0) {
-                "Attachments must be 20 MB or smaller."
-            }
+            require(reportedSize <= CHAT_MEDIA_MAX_BYTES || reportedSize < 0) { "Attachments must be 20 MB or smaller." }
             val bytes = withContext(Dispatchers.IO) {
                 resolver.openInputStream(uri).use { input ->
                     requireNotNull(input) { "The selected file could not be opened." }
-                    val output = java.io.ByteArrayOutputStream()
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var total = 0
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        total += read
-                        require(total <= CHAT_MEDIA_MAX_BYTES) { "Attachments must be 20 MB or smaller." }
-                        output.write(buffer, 0, read)
-                    }
+                    val output = java.io.ByteArrayOutputStream(); val buffer = ByteArray(DEFAULT_BUFFER_SIZE); var total = 0
+                    while (true) { val read = input.read(buffer); if (read < 0) break; total += read; require(total <= CHAT_MEDIA_MAX_BYTES) { "Attachments must be 20 MB or smaller." }; output.write(buffer, 0, read) }
                     output.toByteArray()
                 }
             }
-            val uploaded = cloudinaryUploader.uploadMedia(bytes, userId, "messages", fileName, contentType)
+            val uploaded = cloudinaryUploader.uploadMedia(bytes, "messages", fileName, contentType)
             ChatAttachment(
-                url = uploaded.secureUrl,
-                type = when {
-                    contentType.startsWith("image/") -> com.campus.lostandfound.data.model.MessageMediaType.IMAGE
-                    contentType.startsWith("video/") -> com.campus.lostandfound.data.model.MessageMediaType.VIDEO
-                    else -> com.campus.lostandfound.data.model.MessageMediaType.FILE
-                },
-                name = fileName,
-                sizeBytes = bytes.size.toLong()
+                url = uploaded.secureUrl, publicId = uploaded.publicId, resourceType = uploaded.resourceType,
+                type = when { contentType.startsWith("image/") -> MessageMediaType.IMAGE; contentType.startsWith("video/") -> MessageMediaType.VIDEO; else -> MessageMediaType.FILE },
+                name = fileName, sizeBytes = bytes.size.toLong()
             )
         }
-    } catch (e: Exception) {
-        throw IllegalStateException("Media upload failed. ${e.message.orEmpty()}", e)
+    } catch (error: Exception) { throw uploadFailure(error) }
+
+    fun getConversations(userId: String, onSync: (SyncState) -> Unit = {}): Flow<List<Conversation>> = callbackFlow {
+        publishSync(SyncState(isLoading = true), onSync)
+        val listener = conversations.whereArrayContains("participantIds", userId).orderBy("updatedAt", Query.Direction.DESCENDING)
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
+                if (error != null) listenerFailed(error, onSync)
+                else if (snapshot != null) { listenerReady(snapshot.metadata.isFromCache, snapshot.metadata.hasPendingWrites(), onSync); trySend(snapshot.documents.map { Conversation.fromFirestore(it.id, it.data.orEmpty()) }) }
+            }
+        awaitClose { listener.remove() }
     }
 
-    fun getConversations(userId: String): Flow<List<Conversation>> = callbackFlow {
-        val query = conversationsCollection
-            .whereArrayContains("participantIds", userId)
-            .orderBy("updatedAt", Query.Direction.DESCENDING)
-        val subscription = query.addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
-            if (error != null) {
-                _syncState.value = SyncState(error = readableBackendError(error))
-                trySend(emptyList())
-            } else if (snapshot != null) {
-                _syncState.value = SyncState(
-                    isFromCache = snapshot.metadata.isFromCache,
-                    hasPendingWrites = snapshot.metadata.hasPendingWrites()
-                )
-                trySend(snapshot.documents.mapNotNull { it.toObject(Conversation::class.java) })
+    fun getMessages(conversationId: String, onSync: (SyncState) -> Unit = {}): Flow<List<ChatMessage>> = callbackFlow {
+        publishSync(SyncState(isLoading = true), onSync)
+        val listener = conversations.document(conversationId).collection("messages").orderBy("createdAt")
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
+                if (error != null) listenerFailed(error, onSync)
+                else if (snapshot != null) { listenerReady(snapshot.metadata.isFromCache, snapshot.metadata.hasPendingWrites(), onSync); trySend(snapshot.documents.map { ChatMessage.fromFirestore(it.id, it.data.orEmpty()) }) }
             }
-        }
-        awaitClose { subscription.remove() }
-    }
-
-    fun getMessages(conversationId: String): Flow<List<ChatMessage>> = callbackFlow {
-        val subscription = conversationsCollection.document(conversationId)
-            .collection("messages")
-            .orderBy("createdAt", Query.Direction.ASCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    _syncState.value = SyncState(error = readableBackendError(error))
-                    trySend(emptyList())
-                } else if (snapshot != null) {
-                    trySend(snapshot.documents.mapNotNull { it.toObject(ChatMessage::class.java) })
-                }
-            }
-        awaitClose { subscription.remove() }
+        awaitClose { listener.remove() }
     }
 
     suspend fun getConversation(conversationId: String): Conversation? = withTimeout(12_000) {
-        conversationsCollection.document(conversationId).get().await().toObject(Conversation::class.java)
+        conversations.document(conversationId).get().await().let { snapshot ->
+            if (!snapshot.exists()) null else Conversation.fromFirestore(snapshot.id, snapshot.data.orEmpty())
+        }
     }
 
-    suspend fun startConversation(itemId: String, currentUserId: String): String =
-        serverConfirmed("start this conversation") {
-            val item = getItemById(itemId) ?: error("This report is no longer available.")
-            require(item.userId != currentUserId) { "You cannot start a conversation with yourself." }
-            val users = listOf(currentUserId, item.userId).sorted()
-            val currentUser = getUserById(currentUserId) ?: error("Your profile could not be loaded.")
-            val owner = getUserById(item.userId) ?: error("The report owner's profile could not be loaded.")
-            val conversationId = "${item.id}_${users[0]}_${users[1]}"
-            val doc = conversationsCollection.document(conversationId)
-            val now = System.currentTimeMillis()
-            val conversation = Conversation(
-                id = conversationId,
-                participantIds = users,
-                participantNames = mapOf(currentUser.id to currentUser.name, owner.id to owner.name),
-                participantPhotoUrls = mapOf(currentUser.id to currentUser.photoUrl, owner.id to owner.photoUrl),
-                itemId = item.id,
-                itemTitle = item.title,
-                itemImageUrl = item.imageUrls.firstOrNull() ?: item.imageUri.orEmpty(),
-                createdAt = now,
-                updatedAt = now,
-                lastReadAt = mapOf(currentUserId to now)
-            )
-            firestore.runTransaction(transactionOptions) { transaction ->
-                if (!transaction.get(doc).exists()) transaction.set(doc, conversation)
-            }.await()
-            conversationId
+    suspend fun sendMessage(conversationId: String, text: String, attachment: ChatAttachment? = null) = trusted("send this message") {
+        val attachmentJson = attachment?.let {
+            JSONObject().put("secureUrl", it.url).put("publicId", it.publicId).put("resourceType", it.resourceType)
+                .put("type", it.type.name).put("name", it.name).put("bytes", it.sizeBytes)
         }
-
-    suspend fun sendMessage(
-        conversationId: String,
-        senderId: String,
-        text: String,
-        attachment: ChatAttachment? = null
-    ) = serverConfirmed("send this message") {
-        val cleanText = text.trim()
-        require(cleanText.isNotBlank() || attachment != null) { "Write a message or add an attachment." }
-        require(cleanText.length <= 4000) { "Messages must be 4,000 characters or shorter." }
-        val conversationDoc = conversationsCollection.document(conversationId)
-        val messageDoc = conversationDoc.collection("messages").document()
-        val now = System.currentTimeMillis()
-        val message = ChatMessage(
-            id = messageDoc.id,
-            senderId = senderId,
-            text = cleanText,
-            mediaUrl = attachment?.url.orEmpty(),
-            mediaType = attachment?.type?.name.orEmpty(),
-            mediaName = attachment?.name.orEmpty(),
-            mediaSizeBytes = attachment?.sizeBytes ?: 0L,
-            createdAt = now
-        )
-        val preview = when {
-            cleanText.isNotBlank() -> cleanText.take(160)
-            attachment?.type == com.campus.lostandfound.data.model.MessageMediaType.IMAGE -> "Sent a photo"
-            attachment?.type == com.campus.lostandfound.data.model.MessageMediaType.VIDEO -> "Sent a video"
-            else -> "Sent an attachment"
-        }
-        firestore.batch()
-            .set(messageDoc, message)
-            .update(
-                conversationDoc,
-                mapOf(
-                    "updatedAt" to now,
-                    "lastMessage" to preview,
-                    "lastMessageType" to (attachment?.type?.name ?: "TEXT"),
-                    "lastSenderId" to senderId,
-                    "lastReadAt.$senderId" to now
-                )
-            )
-            .commit().await()
+        api.request("/v1/conversations/$conversationId/messages", body = JSONObject().put("text", text.trim()).put("attachment", attachmentJson))
         Unit
     }
 
-    suspend fun markConversationRead(conversationId: String, userId: String) {
-        conversationsCollection.document(conversationId)
-            .update(FieldPath.of("lastReadAt", userId), System.currentTimeMillis()).await()
+    suspend fun editMessage(conversationId: String, messageId: String, text: String) = trusted("edit this message") {
+        api.request("/v1/conversations/$conversationId/messages/$messageId", "PATCH", JSONObject().put("text", text.trim()))
+        Unit
     }
 
-    fun getItemsByType(type: ItemType): Flow<List<Item>> = observeItems(
-        itemsCollection.whereEqualTo("type", type.name).orderBy("date", Query.Direction.DESCENDING)
-    )
-
-    fun getItemsByUser(userId: String): Flow<List<Item>> = observeItems(
-        itemsCollection.whereEqualTo("userId", userId).orderBy("date", Query.Direction.DESCENDING)
-    )
-
-    suspend fun getItemById(itemId: String): Item? = withTimeout(12_000) {
-        itemsCollection.document(itemId).get().await().toObject(Item::class.java)
+    suspend fun deleteMessage(conversationId: String, messageId: String) = trusted("delete this message") {
+        api.request("/v1/conversations/$conversationId/messages/$messageId", "DELETE")
+        Unit
     }
 
-    fun searchItems(query: String, type: ItemType): Flow<List<Item>> = getItemsByType(type).map { items ->
-        items.filter {
-            it.title.contains(query, ignoreCase = true) ||
-                it.description.contains(query, ignoreCase = true) ||
-                it.category.contains(query, ignoreCase = true) ||
-                it.location.contains(query, ignoreCase = true)
+    suspend fun markConversationRead(conversationId: String) = trusted("mark this conversation read") {
+        api.request("/v1/conversations/$conversationId/read")
+        Unit
+    }
+
+    fun getItemsByType(type: ItemType, onSync: (SyncState) -> Unit = {}): Flow<List<Item>> = observeItems(items.whereEqualTo("type", type.name).whereIn("status", VISIBLE_ITEM_STATUSES).orderBy("date", Query.Direction.DESCENDING), onSync)
+    fun getItemsByUser(userId: String, onSync: (SyncState) -> Unit = {}): Flow<List<Item>> = observeItems(items.whereEqualTo("userId", userId).whereIn("status", VISIBLE_ITEM_STATUSES).orderBy("date", Query.Direction.DESCENDING), onSync)
+    suspend fun getItemById(itemId: String): Item? = withTimeout(12_000) { items.document(itemId).get().await().toObject(Item::class.java) }
+    suspend fun getReportContact(itemId: String): String = trusted("load the private contact details") {
+        api.request("/v1/reports/$itemId/contact", "GET").optString("contactInfo").ifBlank { "No private contact details were supplied." }
+    }
+    fun searchItems(query: String, type: ItemType, onSync: (SyncState) -> Unit = {}): Flow<List<Item>> = getItemsByType(type, onSync).map { results -> results.filter { listOf(it.title, it.description, it.category, it.location).any { value -> value.contains(query, true) } } }
+
+    suspend fun block(targetUid: String) = trusted("block this account") { api.request("/v1/blocks", body = JSONObject().put("targetUid", targetUid)); Unit }
+    suspend fun unblock(targetUid: String) = trusted("unblock this account") { api.request("/v1/blocks/$targetUid", "DELETE"); Unit }
+    suspend fun getBlockedAccounts(): List<String> = trusted("load blocked accounts") {
+        val values = api.request("/v1/blocks", "GET").optJSONArray("targetUids") ?: JSONArray()
+        List(values.length()) { index -> values.optString(index) }.filter { it.isNotBlank() }
+    }
+    suspend fun requestAccountDeletion(): String = trusted("queue account deletion") { api.request("/v1/account-deletion").getString("referenceId") }
+
+    suspend fun saveNotificationPreferences(preferences: Map<String, Boolean>) = trusted("save notification preferences") {
+        val json = JSONObject(); preferences.forEach(json::put); api.request("/v1/notification-preferences", "PUT", json); Unit
+    }
+
+    suspend fun getNotificationPreferences(): Map<String, Boolean> = trusted("load notification preferences") {
+        val data = api.request("/v1/notification-preferences", "GET")
+        NOTIFICATION_PREFERENCE_KEYS.associateWith { key -> data.optBoolean(key, key != "showMessagePreview") }
+    }
+
+    suspend fun registerDeviceToken(token: String) = trusted("enable push notifications") {
+        api.request("/v1/devices", "PUT", JSONObject().put("token", token).put("platform", "ANDROID")); Unit
+    }
+
+    suspend fun getRole(uid: String): String = firestore.collection("roles").document(uid).get().await().getString("role") ?: "USER"
+
+    fun getModerationCases(onSync: (SyncState) -> Unit = {}): Flow<List<ModerationCase>> = callbackFlow {
+        publishSync(SyncState(isLoading = true), onSync)
+        val listener = moderationCases.orderBy("updatedAt", Query.Direction.DESCENDING).limit(100).addSnapshotListener { snapshot, error ->
+            if (error != null) listenerFailed(error, onSync) else if (snapshot != null) { listenerReady(snapshot.metadata.isFromCache, snapshot.metadata.hasPendingWrites(), onSync); trySend(snapshot.documents.mapNotNull { it.toObject(ModerationCase::class.java) }) }
         }
+        awaitClose { listener.remove() }
     }
 
-    private fun observeItems(query: Query): Flow<List<Item>> = callbackFlow {
-        val subscription = query.addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
-            if (error != null) {
-                _syncState.value = SyncState(error = readableBackendError(error))
-                // Firestore can reject a listener during sign-out before Compose disposes
-                // the previous screen. Surface the state without failing the UI coroutine.
-                trySend(emptyList())
-                return@addSnapshotListener
-            }
-            if (snapshot != null) {
-                _syncState.value = SyncState(
-                    isFromCache = snapshot.metadata.isFromCache,
-                    hasPendingWrites = snapshot.metadata.hasPendingWrites()
-                )
-                trySend(snapshot.documents.mapNotNull { it.toObject(Item::class.java) })
-            }
+    suspend fun moderationAction(caseId: String, action: String, targetId: String) = trusted("apply this moderation action") {
+        api.request("/v1/admin/cases/$caseId/action", body = JSONObject().put("action", action).put("targetId", targetId)); Unit
+    }
+
+    suspend fun assignRole(uid: String, role: String) = trusted("update this role") {
+        api.request("/v1/admin/roles/$uid", "PUT", JSONObject().put("role", role)); Unit
+    }
+
+    suspend fun reportAbuse(targetType: String, targetId: String, conversationId: String = "", reason: String, details: String) = trusted("submit this abuse report") {
+        api.request("/v1/abuse-reports", body = JSONObject().put("targetType", targetType).put("targetId", targetId).put("conversationId", conversationId).put("reason", reason).put("details", details)); Unit
+    }
+
+    private fun observeItems(query: Query, onSync: (SyncState) -> Unit): Flow<List<Item>> = callbackFlow {
+        publishSync(SyncState(isLoading = true), onSync)
+        val listener = query.addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
+            if (error != null) listenerFailed(error, onSync)
+            else if (snapshot != null) { listenerReady(snapshot.metadata.isFromCache, snapshot.metadata.hasPendingWrites(), onSync); trySend(snapshot.documents.mapNotNull { it.toObject(Item::class.java) }.filter { it.status != ItemStatus.REMOVED }) }
         }
-        awaitClose { subscription.remove() }
+        awaitClose { listener.remove() }
     }
 
-    private suspend fun <T> serverConfirmed(action: String, block: suspend () -> T): T = try {
-        withTimeout(12_000) { block() }
-    } catch (e: Exception) {
-        val message = if (e is TimeoutCancellationException) {
-            "Could not $action because Firebase did not respond. Check that Cloud Firestore is created and your phone has internet access."
-        } else {
-            "Could not $action. ${readableBackendError(e)}"
+    private fun listenerReady(fromCache: Boolean, pending: Boolean, onSync: (SyncState) -> Unit) { publishSync(SyncState(isLoading = false, isFromCache = fromCache, hasPendingWrites = pending), onSync) }
+    private fun listenerFailed(error: Exception, onSync: (SyncState) -> Unit) { publishSync(syncFailure(error), onSync) }
+    private fun syncFailure(error: Exception) = SyncState(isLoading = false, error = readableFirestoreError(error), errorCode = "FIRESTORE_LISTENER", referenceId = "ANDROID-FIRESTORE")
+    private fun publishSync(state: SyncState, onSync: (SyncState) -> Unit) { _syncState.value = state; onSync(state) }
+
+    private suspend fun <T> trusted(action: String, block: suspend () -> T): T = try { withTimeout(35_000) { block() } }
+    catch (error: Exception) {
+        val failure = when (error) {
+            is ApiFailure -> error
+            is TimeoutCancellationException -> ApiFailure("DEPENDENCY_UNAVAILABLE", "Could not $action because the service did not respond. Check your connection and retry.", true, "ANDROID-TIMEOUT")
+            else -> ApiFailure("INTERNAL_ERROR", "Could not $action. Please retry.", true, "ANDROID-UNEXPECTED", error)
         }
-        _syncState.value = SyncState(error = message)
-        throw IllegalStateException(message, e)
+        _syncState.value = SyncState(isLoading = false, error = failure.userMessage(), errorCode = failure.code, referenceId = failure.referenceId)
+        FirebaseCrashlytics.getInstance().apply { setCustomKey("error_code", failure.code); setCustomKey("reference_id", failure.referenceId); recordException(failure) }
+        throw IllegalStateException(failure.userMessage(), failure)
     }
 
-    private fun readableBackendError(error: Exception): String {
-        val raw = error.message.orEmpty()
+    private fun readableFirestoreError(error: Exception): String {
+        val raw = error.message.orEmpty().lowercase()
         return when {
-            "offline" in raw.lowercase() || "unavailable" in raw.lowercase() ->
-                "The app cannot reach Cloud Firestore. Create the database, deploy its rules, and check your connection."
-            "permission_denied" in raw.lowercase() || "permission denied" in raw.lowercase() ->
-                "Firestore rejected the request. Deploy the project's security rules."
-            "index" in raw.lowercase() -> "A required Firestore index is missing. Deploy firestore.indexes.json."
-            raw.isNotBlank() -> raw
-            else -> "Firebase is currently unavailable."
+            "permission" in raw -> "Your session cannot access this information. Sign in again. Reference: ANDROID-FIRESTORE-PERMISSION"
+            "index" in raw -> "This view is being prepared. Ask an administrator to deploy the required index. Reference: ANDROID-FIRESTORE-INDEX"
+            "unavailable" in raw || "offline" in raw -> "CBU Find is offline. Check your connection and retry. Reference: ANDROID-FIRESTORE-OFFLINE"
+            else -> "CBU Find could not load the latest information. Retry the view. Reference: ANDROID-FIRESTORE"
         }
     }
+
+    private fun uploadFailure(error: Exception): IllegalStateException {
+        val message = if (error is TimeoutCancellationException) "The upload timed out. Check your connection and retry. Reference: ANDROID-UPLOAD-TIMEOUT" else if (error is ApiFailure) error.userMessage() else "The media upload failed. Retry, or continue without an attachment. Reference: ANDROID-UPLOAD"
+        return IllegalStateException(message, error)
+    }
+
+    private fun User.profileJson() = JSONObject().put("name", name.trim()).put("studentId", studentId.trim()).put("programme", programme.trim()).put("yearOfStudy", yearOfStudy.trim()).put("phone", phone.trim()).put("photoUrl", photoUrl.trim()).apply { photoAsset?.let { put("photoAsset", it.json()) } }
+    private fun Item.reportJson(): JSONObject {
+        val assets = JSONArray(); media.forEach { asset -> assets.put(asset.json()) }
+        return JSONObject().put("type", type.name).put("title", title.trim()).put("description", description.trim()).put("category", category).put("location", location.trim()).put("date", date).put("contactInfo", contactInfo.trim()).put("media", assets)
+    }
+    private fun MediaAsset.json() = JSONObject().put("secureUrl", secureUrl).put("publicId", publicId).put("resourceType", resourceType).put("format", format).put("bytes", bytes).put("width", width).put("height", height).put("originalName", originalName)
+    private fun com.campus.lostandfound.data.remote.CloudinaryUploadResult.toMediaAsset() = MediaAsset(secureUrl, publicId, resourceType, format, bytes, width, height, originalName)
 
     private companion object {
         const val CHAT_MEDIA_MAX_BYTES = 20 * 1024 * 1024
+        val NOTIFICATION_PREFERENCE_KEYS = listOf("claims", "claimDecisions", "messages", "reportUpdates", "moderation", "showMessagePreview")
+        val VISIBLE_ITEM_STATUSES = listOf(ItemStatus.ACTIVE.name, ItemStatus.MATCHED.name, ItemStatus.RESOLVED.name)
     }
 }

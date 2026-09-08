@@ -12,5 +12,8 @@ data class User(
     val yearOfStudy: String = "",
     val phone: String = "",
     val photoUrl: String = "",
-    val createdAt: Long = 0L
+    val photoAsset: MediaAsset? = null,
+    val status: String = "ACTIVE",
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L
 )

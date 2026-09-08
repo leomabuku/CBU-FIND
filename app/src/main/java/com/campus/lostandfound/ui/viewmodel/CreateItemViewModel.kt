@@ -45,9 +45,9 @@ class CreateItemViewModel(private val repository: AppRepository) : ViewModel() {
             _isSubmitting.value = true
             _error.value = null
             try {
-                val imageUrls = imageUris.mapIndexed { index, uri ->
+                val media = imageUris.mapIndexed { index, uri ->
                     _progressMessage.value = "Uploading image ${index + 1} of ${imageUris.size}…"
-                    repository.uploadImage(uri, userId, "reports")
+                    repository.uploadImage(uri, "reports")
                 }
                 _progressMessage.value = "Publishing report…"
                 val item = Item(
@@ -56,8 +56,9 @@ class CreateItemViewModel(private val repository: AppRepository) : ViewModel() {
                     description = description.trim(),
                     category = category,
                     location = location.trim(),
-                    imageUrls = imageUrls,
-                    imageUri = imageUrls.firstOrNull(),
+                    media = media,
+                    imageUrls = media.map { it.secureUrl },
+                    imageUri = media.firstOrNull()?.secureUrl,
                     date = System.currentTimeMillis(),
                     userId = userId,
                     contactInfo = contactInfo.trim()

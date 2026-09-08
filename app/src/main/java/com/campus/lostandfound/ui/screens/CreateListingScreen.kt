@@ -201,7 +201,7 @@ fun CreateListingScreen(
                 value = contactInfo,
                 onValueChange = { contactInfo = it; validationError = null },
                 label = { Text("Safe contact method") },
-                supportingText = { Text("Phone, email, or where to hand in the item") },
+                supportingText = { Text("Optional. Phone, email, or where to hand in the item") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -229,7 +229,6 @@ fun CreateListingScreen(
                         category.isBlank() -> "Choose an item category."
                         location.trim().length < 3 -> "Add a useful location."
                         description.trim().length < 10 -> "Add at least a short description."
-                        contactInfo.isBlank() -> "Add a safe contact method."
                         else -> null
                     }
                     if (validationError == null) {

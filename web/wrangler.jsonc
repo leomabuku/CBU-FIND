@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "cbu-find-web",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "services": [
+    { "binding": "CBU_API", "service": "cbu-find-api-staging" }
+  ],
+  "env": {
+    "staging": {
+      "name": "cbu-find-web-staging",
+      "services": [
+        { "binding": "CBU_API", "service": "cbu-find-api-staging" }
+      ]
+    },
+    "production": {
+      "name": "cbu-find-web-production",
+      "services": [
+        { "binding": "CBU_API", "service": "cbu-find-api-production" }
+      ]
+    }
+  }
+}

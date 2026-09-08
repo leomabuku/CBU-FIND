@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +54,7 @@ fun InboxScreen(
     onConversationClick: (String) -> Unit
 ) {
     val conversations by viewModel.conversations.collectAsStateWithLifecycle()
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
     LaunchedEffect(currentUserId) { viewModel.load(currentUserId) }
 
     Scaffold(
@@ -76,7 +78,11 @@ fun InboxScreen(
             )
         }
     ) { padding ->
-        if (conversations.isEmpty()) {
+        if (syncState.isLoading) {
+            Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        } else if (syncState.error != null && conversations.isEmpty()) {
+            ActionableFailure("Inbox could not load", syncState.error!!, { viewModel.load(currentUserId) }, Modifier.padding(padding))
+        } else if (conversations.isEmpty()) {
             Column(
                 modifier = Modifier.padding(padding).fillMaxSize().padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -96,6 +102,7 @@ fun InboxScreen(
             }
         } else {
             LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
+                syncState.error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth().padding(14.dp)) } }
                 items(conversations, key = { it.id }) { conversation ->
                     ConversationRow(conversation, currentUserId) { onConversationClick(conversation.id) }
                 }

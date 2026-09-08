@@ -8,6 +8,7 @@ class CampusLostAndFoundApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AppCheckInstaller.install()
         container = AppContainer(this)
     }
 }

@@ -7,8 +7,19 @@ enum class ItemType {
 }
 
 enum class ItemStatus {
-    ACTIVE, RESOLVED
+    ACTIVE, MATCHED, RESOLVED, REMOVED
 }
+
+data class MediaAsset(
+    val secureUrl: String = "",
+    val publicId: String = "",
+    val resourceType: String = "image",
+    val format: String = "",
+    val bytes: Long = 0L,
+    val width: Int = 0,
+    val height: Int = 0,
+    val originalName: String = ""
+)
 
 object ItemCategories {
     val all = listOf(
@@ -34,9 +45,12 @@ data class Item(
     val location: String = "",
     val imageUri: String? = null,
     val imageUrls: List<String> = emptyList(),
+    val media: List<MediaAsset> = emptyList(),
     val date: Long = 0L,
     val status: ItemStatus = ItemStatus.ACTIVE,
     val userId: String = "",
     val contactInfo: String = "",
-    val resolvedAt: Long? = null
+    val matchedClaimId: String = "",
+    val resolvedAt: Long? = null,
+    val updatedAt: Long = 0L
 )

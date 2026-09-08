@@ -11,6 +11,9 @@ import com.campus.lostandfound.ui.viewmodel.HomeViewModel
 import com.campus.lostandfound.ui.viewmodel.InboxViewModel
 import com.campus.lostandfound.ui.viewmodel.ChatViewModel
 import com.campus.lostandfound.ui.viewmodel.ItemDetailsViewModel
+import com.campus.lostandfound.ui.viewmodel.ClaimsViewModel
+import com.campus.lostandfound.ui.viewmodel.SettingsViewModel
+import com.campus.lostandfound.ui.viewmodel.ModerationViewModel
 
 object AppViewModelProvider {
     val Factory = viewModelFactory {
@@ -32,6 +35,9 @@ object AppViewModelProvider {
         initializer {
             ChatViewModel(campusApplication().container.repository)
         }
+        initializer { ClaimsViewModel(campusApplication().container.repository) }
+        initializer { SettingsViewModel(campusApplication().container.repository) }
+        initializer { ModerationViewModel(campusApplication().container.repository) }
         initializer {
             com.campus.lostandfound.ui.viewmodel.ProfileViewModel(campusApplication().container.repository)
         }

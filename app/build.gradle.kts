@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 val localProperties = Properties().apply {
@@ -13,8 +14,9 @@ val localProperties = Properties().apply {
     }
 }
 
-fun cloudinaryProperty(name: String): String {
+fun localProperty(name: String): String {
     return (findProperty(name) as? String)
+        ?: System.getenv(name)
         ?: localProperties.getProperty(name)
         ?: ""
 }
@@ -25,14 +27,14 @@ fun buildConfigString(value: String): String {
 
 android {
     namespace = "com.campus.lostandfound"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.campus.lostandfound"
         minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 36
+        versionCode = 3
+        versionName = "2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -41,13 +43,13 @@ android {
 
         buildConfigField(
             "String",
-            "CLOUDINARY_CLOUD_NAME",
-            buildConfigString(cloudinaryProperty("CLOUDINARY_CLOUD_NAME"))
+            "WORKER_API_BASE_URL",
+            buildConfigString(localProperty("WORKER_API_BASE_URL"))
         )
         buildConfigField(
             "String",
-            "CLOUDINARY_UPLOAD_PRESET",
-            buildConfigString(cloudinaryProperty("CLOUDINARY_UPLOAD_PRESET"))
+            "APP_CHECK_DEBUG_SECRET",
+            buildConfigString(localProperty("APP_CHECK_DEBUG_SECRET"))
         )
     }
 
@@ -72,7 +74,7 @@ android {
         buildConfig = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.2"
+        kotlinCompilerExtensionVersion = "1.5.14"
     }
     packaging {
         resources {
@@ -102,12 +104,17 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.1.1"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    implementation("com.google.firebase:firebase-crashlytics-ktx")
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
     implementation("com.google.android.gms:play-services-auth:20.7.0")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.02.00"))

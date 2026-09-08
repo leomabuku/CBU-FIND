@@ -2,6 +2,24 @@
 
 This document records the changes made during the assisted development of the Campus Lost and Found Android application. It describes application behavior, Firebase configuration, security work, fixes, and supporting files.
 
+## 2026-09-08 — messaging stability, report handover, and UI completion
+
+- Fixed Android conversation crashes by decoding legacy/null Firestore message timestamps safely and writing compatible numeric defaults for new messages.
+- Fixed web replies that were rejected when an empty attachment was serialized, and routed browser API calls through the same-origin web Worker to avoid client-side blocking of the API hostname.
+- Added editing and deletion for a sender's own messages while retaining an auditable deletion placeholder in the conversation.
+- Added an owner-only **Mark resolved** action to accepted handover chats on Android and web, with confirmation, progress, success/error feedback, and a resolved state. Report details continue to support reopening when needed.
+- Added light, dark, and system appearance choices under Settings and completed the compact responsive navigation layout across Android and web.
+- Improved user-facing failures with stable error codes, retry guidance, and reference IDs instead of raw backend errors or false empty states.
+- Added regression coverage for message compatibility, API validation, state notices, rendered UI, and empty-state behavior.
+
+## 2026-08-10 — cross-platform completion and trusted Spark architecture
+
+- Restored and expanded the Vinext web client to reports, claims, messaging, profiles, settings, deletion, and moderation.
+- Added a Cloudflare Worker with ID/App Check verification, signed uploads, rate limits, queues, structured errors, FCM, and deletion/anonymization.
+- Removed phone/SMS sign-in from Android and active setup instructions; optional phone contact remains private data.
+- Replaced unsigned uploads and direct business writes with trusted Worker operations.
+- Added explicit loading/empty/offline/error states, API 36/JDK 17 tooling, rules/indexes, dry-run migration/backup tools, and automated tests.
+
 ## Starting project state
 
 The workspace already contained a native Android application using Kotlin, Jetpack Compose, Material 3, Firebase Authentication, Cloud Firestore, and Compose Navigation. It had basic email/password and Google authentication, lost/found tabs, simple report creation, report details, profile viewing, and returned-item status.

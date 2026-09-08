@@ -1,0 +1,5 @@
+# Copy to .dev.vars. Never commit the real values.
+GOOGLE_SERVICE_ACCOUNT_EMAIL=worker-service-account@example-project.iam.gserviceaccount.com
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+CLOUDINARY_API_KEY=replace-me
+CLOUDINARY_API_SECRET=replace-me

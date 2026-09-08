@@ -1,0 +1,15 @@
+{
+  "name": "@cbu-find/migrations",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "backup": "node backup.mjs",
+    "dry-run": "node migrate.mjs",
+    "apply": "node migrate.mjs --apply",
+    "audit:phone-auth": "node audit-phone-auth.mjs",
+    "audit:auth-providers": "node auth-providers.mjs",
+    "disable:phone-auth": "node auth-providers.mjs --disable-phone"
+  },
+  "dependencies": { "firebase-admin": "14.2.0" }
+}

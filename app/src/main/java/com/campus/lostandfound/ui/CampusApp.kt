@@ -1,6 +1,7 @@
 package com.campus.lostandfound.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -22,29 +23,53 @@ import com.campus.lostandfound.ui.viewmodel.HomeViewModel
 import com.campus.lostandfound.ui.viewmodel.ItemDetailsViewModel
 import com.campus.lostandfound.ui.viewmodel.InboxViewModel
 import com.campus.lostandfound.ui.viewmodel.ChatViewModel
+import com.campus.lostandfound.ui.viewmodel.ClaimsViewModel
+import com.campus.lostandfound.ui.viewmodel.SettingsViewModel
+import com.campus.lostandfound.ui.viewmodel.ModerationViewModel
+import com.campus.lostandfound.ui.screens.ClaimsScreen
+import com.campus.lostandfound.ui.screens.SettingsScreen
+import com.campus.lostandfound.ui.screens.ModerationScreen
+import com.campus.lostandfound.ui.theme.ThemeMode
 
 @Composable
-fun CampusApp() {
+fun CampusApp(
+    notificationDestination: String? = null,
+    onNotificationDestinationConsumed: () -> Unit = {},
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    onThemeModeChanged: (ThemeMode) -> Unit = {}
+) {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = viewModel(factory = AppViewModelProvider.Factory)
     val currentUser by authViewModel.currentUser.collectAsStateWithLifecycle()
     val isAuthReady by authViewModel.isAuthReady.collectAsStateWithLifecycle()
 
+    LaunchedEffect(notificationDestination, isAuthReady, currentUser?.id) {
+        if (notificationDestination != null && isAuthReady && currentUser != null) {
+            val currentRoute = navController.currentDestination?.route
+            if (currentRoute != "splash" && currentRoute != "auth") {
+                navController.navigate(notificationDestination) { launchSingleTop = true }
+                onNotificationDestinationConsumed()
+            }
+        }
+    }
+
     NavHost(navController = navController, startDestination = "splash") {
         composable("splash") {
             SplashScreen(isReady = isAuthReady, onTimeout = {
-                navController.navigate(if (currentUser == null) "auth" else "home") {
+                navController.navigate(if (currentUser == null) "auth" else notificationDestination ?: "home") {
                     popUpTo("splash") { inclusive = true }
                 }
+                if (currentUser != null && notificationDestination != null) onNotificationDestinationConsumed()
             })
         }
         composable("auth") {
             AuthScreen(
                 viewModel = authViewModel,
                 onLoginSuccess = {
-                    navController.navigate("home") {
+                    navController.navigate(notificationDestination ?: "home") {
                         popUpTo("auth") { inclusive = true }
                     }
+                    if (notificationDestination != null) onNotificationDestinationConsumed()
                 }
             )
         }
@@ -52,10 +77,14 @@ fun CampusApp() {
             val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory)
             HomeDashboardScreen(
                 viewModel = homeViewModel,
+                currentUserId = currentUser?.id ?: "",
                 onCreateListing = { navController.navigate("create_listing") },
                 onItemClick = { itemId -> navController.navigate("item_details/$itemId") },
                 onProfileClick = { navController.navigate("profile") },
-                onInboxClick = { navController.navigate("inbox") }
+                onInboxClick = { navController.navigate("inbox") },
+                onClaimsClick = { navController.navigate("claims") },
+                onSettingsClick = { navController.navigate("settings") },
+                onModerationClick = { navController.navigate("moderation") }
             )
         }
         composable("create_listing") {
@@ -77,8 +106,23 @@ fun CampusApp() {
                 currentUserId = currentUser?.id ?: "",
                 viewModel = itemDetailsViewModel,
                 onNavigateBack = { navController.popBackStack() },
-                onOpenConversation = { conversationId -> navController.navigate("chat/$conversationId") }
+                onClaimSubmitted = { navController.navigate("claims") }
             )
+        }
+        composable("claims") {
+            val claimsViewModel: ClaimsViewModel = viewModel(factory = AppViewModelProvider.Factory)
+            ClaimsScreen(currentUser?.id ?: "", claimsViewModel, { navController.popBackStack() }) { conversationId -> navController.navigate("chat/$conversationId") }
+        }
+        composable("settings") {
+            val settingsViewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider.Factory)
+            SettingsScreen(settingsViewModel, themeMode, onThemeModeChanged, { navController.popBackStack() }) {
+                authViewModel.logout()
+                navController.navigate("auth") { popUpTo("home") { inclusive = true } }
+            }
+        }
+        composable("moderation") {
+            val moderationViewModel: ModerationViewModel = viewModel(factory = AppViewModelProvider.Factory)
+            ModerationScreen(currentUser?.id ?: "", moderationViewModel) { navController.popBackStack() }
         }
         composable("inbox") {
             val inboxViewModel: InboxViewModel = viewModel(factory = AppViewModelProvider.Factory)

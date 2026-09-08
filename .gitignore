@@ -25,3 +25,26 @@ Thumbs.db
 # JVM crash logs
 hs_err_pid*.log
 replay_pid*.log
+
+# JavaScript, Workers, local secrets, and generated test output
+node_modules/
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
+.wrangler/
+coverage/
+playwright-report/
+test-results/
+firebase-debug.log
+firestore-debug.log
+
+# Production snapshots and audit exports must never be committed
+backups/firestore/*
+!backups/firestore/.gitkeep
+
+# Generated documents, previews, scratch work, and compiled workspace packages
+output/
+outputs/
+tmp/
+packages/*/dist/

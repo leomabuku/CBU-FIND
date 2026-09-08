@@ -26,17 +26,27 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.AssignmentTurnedIn
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,69 +72,80 @@ import java.util.Locale
 @Composable
 fun HomeDashboardScreen(
     viewModel: HomeViewModel,
+    currentUserId: String,
     onCreateListing: () -> Unit,
     onItemClick: (String) -> Unit,
     onProfileClick: () -> Unit,
-    onInboxClick: () -> Unit
+    onInboxClick: () -> Unit,
+    onClaimsClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onModerationClick: () -> Unit
 ) {
     val reports by viewModel.items.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
+    val role by viewModel.role.collectAsStateWithLifecycle()
+    LaunchedEffect(currentUserId) { viewModel.loadRole(currentUserId) }
 
-    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
-        LazyColumn(
-            modifier = Modifier.padding(padding).fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 28.dp)
-        ) {
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.onBackground)
-                        .padding(horizontal = 18.dp, vertical = 14.dp)
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(R.drawable.cbu_find_logo),
-                            contentDescription = "CBU Find",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(58.dp).clip(RoundedCornerShape(14.dp))
-                        )
-                        Column(Modifier.padding(start = 10.dp).weight(1f)) {
-                            Text("CBU Find", color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.titleLarge)
-                            Text("Lost it? Let's find it.", color = MaterialTheme.colorScheme.background.copy(alpha = .7f))
-                        }
-                        IconButton(onClick = onInboxClick) {
-                            Icon(Icons.Default.Email, "Messages", tint = MaterialTheme.colorScheme.background)
-                        }
-                        IconButton(onClick = onProfileClick) {
-                            Icon(Icons.Default.Person, "Profile", tint = MaterialTheme.colorScheme.background)
-                        }
-                    }
-                    Spacer(Modifier.height(24.dp))
-                    Text("Good to see you.", color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.headlineMedium)
-                    Text(
-                        "Let's get items back where they belong.",
-                        color = MaterialTheme.colorScheme.background.copy(alpha = .72f),
-                        style = MaterialTheme.typography.bodyLarge
+                    Image(
+                        painter = painterResource(R.drawable.cbu_find_logo),
+                        contentDescription = "CBU Find",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(42.dp).clip(RoundedCornerShape(12.dp))
                     )
-                    Spacer(Modifier.height(20.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HeroAction("I lost\nsomething", ItemType.LOST, selectedTab == ItemType.LOST) {
-                            viewModel.onTabSelected(ItemType.LOST)
-                            onCreateListing()
-                        }
-                        HeroAction("I found\nsomething", ItemType.FOUND, selectedTab == ItemType.FOUND) {
-                            viewModel.onTabSelected(ItemType.FOUND)
-                            onCreateListing()
+                    Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                        Text("CBU Find", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                        Text("Lost it? Let's find it.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (role == "MODERATOR" || role == "ADMIN") IconButton(onClick = onModerationClick) { Icon(Icons.Default.AdminPanelSettings, "Moderation") }
+                    IconButton(onClick = onProfileClick) {
+                        Box(Modifier.size(36.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Person, "Profile", tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
             }
+        },
+        bottomBar = {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                NavigationBarItem(selected = true, onClick = {}, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Home") })
+                NavigationBarItem(selected = false, onClick = onClaimsClick, icon = { Icon(Icons.Default.AssignmentTurnedIn, null) }, label = { Text("Claims") })
+                NavigationBarItem(selected = false, onClick = onInboxClick, icon = { Icon(Icons.Default.Email, null) }, label = { Text("Messages") })
+                NavigationBarItem(selected = false, onClick = onSettingsClick, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Settings") })
+            }
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = onCreateListing,
+                icon = { Icon(Icons.Default.Add, null) },
+                text = { Text("Create report", fontWeight = FontWeight.Bold) },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.padding(padding).fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 96.dp)
+        ) {
+            item {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 20.dp)) {
+                    Text("Good evening", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+                    Text("Campus reports", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
+                }
+            }
 
             item {
-                ReturnedBanner(reports.count { it.status == ItemStatus.RESOLVED })
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = viewModel::onSearchQueryChange,
@@ -132,8 +153,15 @@ fun HomeDashboardScreen(
                     placeholder = { Text("Search items, places or categories") },
                     singleLine = true,
                     shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)
                 )
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    FilterChip(selected = selectedTab == ItemType.LOST, onClick = { viewModel.onTabSelected(ItemType.LOST) }, label = { Text("LOST") }, modifier = Modifier.weight(1f))
+                    FilterChip(selected = selectedTab == ItemType.FOUND, onClick = { viewModel.onTabSelected(ItemType.FOUND) }, label = { Text("FOUND") }, modifier = Modifier.weight(1f))
+                }
             }
 
             if (!syncState.isOnline) item { SyncBanner(syncState) }
@@ -160,29 +188,50 @@ fun HomeDashboardScreen(
                 }
             }
 
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Recent reports", style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            if (selectedTab == ItemType.LOST) "Items the community is looking for" else "Items waiting to be reunited",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(if (selectedTab == ItemType.LOST) "LOST" else "FOUND", color = if (selectedTab == ItemType.LOST) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
-                }
-            }
+            item { Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp)) { Text("Recent reports", style = MaterialTheme.typography.titleLarge); Text(if (selectedTab == ItemType.LOST) "Items the community is looking for" else "Items waiting to be reunited", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
 
             if (reports.isEmpty()) {
-                item { EmptyReportsState(searchQuery.isNotBlank() || selectedCategory != null, onCreateListing) }
+                item {
+                    when {
+                        syncState.isLoading -> Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) { androidx.compose.material3.CircularProgressIndicator() }
+                        syncState.error != null -> ActionableFailure("Reports could not load", syncState.error!!, viewModel::retry, Modifier.fillMaxWidth().height(260.dp))
+                        else -> EmptyReportsState(searchQuery.isNotBlank() || selectedCategory != null, onCreateListing)
+                    }
+                }
             } else {
                 items(reports, key = { it.id }) { report ->
-                    ItemCard(report) { onItemClick(report.id) }
+                    CompactItemRow(report) { onItemClick(report.id) }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CompactItemRow(item: Item, onClick: () -> Unit) {
+    val imageUrl = item.imageUrls.firstOrNull() ?: item.imageUri
+    Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), color = MaterialTheme.colorScheme.surface) {
+        Column {
+            Row(Modifier.padding(horizontal = 18.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (!imageUrl.isNullOrBlank()) {
+                    AsyncImage(model = imageUrl, contentDescription = "Photo of ${item.title}", contentScale = ContentScale.Crop, modifier = Modifier.size(76.dp).clip(RoundedCornerShape(16.dp)))
+                } else {
+                    Box(Modifier.size(76.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.primary) }
+                }
+                Column(Modifier.padding(start = 13.dp).weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (item.type == ItemType.LOST) "LOST" else "FOUND", color = if (item.type == ItemType.LOST) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.weight(1f))
+                        Text(SimpleDateFormat("dd MMM", Locale.getDefault()).format(Date(item.date)), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.LocationOn, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                        Text(item.location, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 3.dp))
+                    }
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
         }
     }
 }

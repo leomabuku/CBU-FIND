@@ -1,247 +1,92 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function role() {
+      return signedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role
+        : "USER";
+    }
+    function moderator() { return role() == "MODERATOR" || role() == "ADMIN"; }
+    function admin() { return role() == "ADMIN"; }
+    function participant(conversationId) {
+      return signedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+    }
+    function acceptedClaim(itemId) {
+      let path = /databases/$(database)/documents/claims/$(itemId + "_" + request.auth.uid);
+      return signedIn() && exists(path) && get(path).data.status == "ACCEPTED";
     }
 
-    function ownsUser(userId) {
-      return signedIn() && request.auth.uid == userId;
+    match /users/{uid} {
+      allow get: if isSelf(uid) || admin();
+      allow list: if admin();
+      allow create, update, delete: if false;
     }
-
-    function validUser() {
-      return request.resource.data.keys().hasOnly([
-          'name', 'studentId', 'email', 'programme', 'yearOfStudy',
-          'phone', 'photoUrl', 'createdAt'
-        ])
-        && request.resource.data.name is string
-        && request.resource.data.name.size() <= 120
-        && request.resource.data.studentId is string
-        && request.resource.data.studentId.size() <= 40
-        && request.resource.data.email is string
-        && request.resource.data.email.size() <= 254
-        && request.resource.data.programme is string
-        && request.resource.data.programme.size() <= 160
-        && request.resource.data.yearOfStudy is string
-        && request.resource.data.yearOfStudy.size() <= 40
-        && request.resource.data.phone is string
-        && request.resource.data.phone.size() <= 30
-        && request.resource.data.photoUrl is string;
-    }
-
-    function validItem() {
-      return request.resource.data.keys().hasAll([
-          'type', 'title', 'description', 'category', 'location',
-          'date', 'status', 'userId', 'contactInfo'
-        ])
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.type in ['LOST', 'FOUND']
-        && request.resource.data.status in ['ACTIVE', 'RESOLVED']
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 3
-        && request.resource.data.title.size() <= 120
-        && request.resource.data.description is string
-        && request.resource.data.description.size() <= 2000
-        && request.resource.data.location is string
-        && request.resource.data.location.size() <= 300;
-    }
-
-    function isConversationParticipant(conversation) {
-      return signedIn()
-        && conversation.participantIds is list
-        && request.auth.uid in conversation.participantIds;
-    }
-
-    function validConversation() {
-      return request.resource.data.keys().hasOnly([
-          'participantIds', 'participantNames', 'participantPhotoUrls',
-          'itemId', 'itemTitle', 'itemImageUrl', 'createdAt', 'updatedAt',
-          'lastMessage', 'lastMessageType', 'lastSenderId', 'lastReadAt'
-        ])
-        && request.resource.data.participantIds is list
-        && request.resource.data.participantIds.size() == 2
-        && request.resource.data.participantIds[0]
-          != request.resource.data.participantIds[1]
-        && request.resource.data.participantNames is map
-        && request.resource.data.participantNames.keys().hasOnly(
-          request.resource.data.participantIds
-        )
-        && request.resource.data.participantNames.keys().hasAll(
-          request.resource.data.participantIds
-        )
-        && request.resource.data.participantPhotoUrls is map
-        && request.resource.data.participantPhotoUrls.keys().hasOnly(
-          request.resource.data.participantIds
-        )
-        && request.resource.data.participantPhotoUrls.keys().hasAll(
-          request.resource.data.participantIds
-        )
-        && request.resource.data.itemId is string
-        && request.resource.data.itemTitle is string
-        && request.resource.data.itemTitle.size() <= 120
-        && request.resource.data.itemImageUrl is string
-        && request.resource.data.lastMessage is string
-        && request.resource.data.lastMessage.size() <= 160
-        && request.resource.data.lastMessageType
-          in ['TEXT', 'IMAGE', 'VIDEO', 'FILE']
-        && request.resource.data.lastSenderId is string
-        && (
-          request.resource.data.lastSenderId == ''
-          || request.resource.data.lastSenderId
-            in request.resource.data.participantIds
-        )
-        && request.resource.data.lastReadAt is map
-        && request.resource.data.lastReadAt.keys().hasOnly(
-          request.resource.data.participantIds
-        )
-        && request.resource.data.createdAt is int
-        && request.resource.data.updatedAt is int;
-    }
-
-    function validMessage() {
-      return request.resource.data.keys().hasOnly([
-          'senderId', 'text', 'mediaUrl', 'mediaType', 'mediaName',
-          'mediaSizeBytes', 'createdAt'
-        ])
-        && request.resource.data.senderId == request.auth.uid
-        && request.resource.data.text is string
-        && request.resource.data.text.size() <= 4000
-        && request.resource.data.mediaUrl is string
-        && request.resource.data.mediaUrl.size() <= 2000
-        && (
-          request.resource.data.mediaUrl == ''
-          || request.resource.data.mediaUrl.matches(
-            'https://res.cloudinary.com/.*'
-          )
-        )
-        && request.resource.data.mediaType
-          in ['', 'IMAGE', 'VIDEO', 'FILE']
-        && request.resource.data.mediaName is string
-        && request.resource.data.mediaName.size() <= 300
-        && request.resource.data.mediaSizeBytes is int
-        && request.resource.data.mediaSizeBytes >= 0
-        && request.resource.data.mediaSizeBytes <= 20 * 1024 * 1024
-        && request.resource.data.createdAt is int
-        && (
-          request.resource.data.text.size() > 0
-          || request.resource.data.mediaUrl.size() > 0
-        );
-    }
-
-    match /users/{userId} {
+    match /publicProfiles/{uid} {
       allow read: if signedIn();
-
-      allow create, update: if ownsUser(userId)
-        && validUser();
-
-      allow delete: if false;
+      allow write: if false;
     }
-
     match /items/{itemId} {
-      allow read: if signedIn();
-
-      allow create: if signedIn()
-        && validItem();
-
-      allow update: if signedIn()
-        && resource.data.userId == request.auth.uid
-        && request.resource.data.userId == resource.data.userId
-        && validItem();
-
-      allow delete: if signedIn()
-        && resource.data.userId == request.auth.uid;
+      allow get: if signedIn() && (resource.data.status != "REMOVED" || resource.data.userId == request.auth.uid || moderator());
+      allow list: if signedIn() && resource.data.status != "REMOVED";
+      allow create, update, delete: if false;
     }
-
+    match /reportContacts/{itemId} {
+      allow get: if signedIn() && (resource.data.ownerId == request.auth.uid || acceptedClaim(itemId));
+      allow list, create, update, delete: if false;
+    }
+    match /claims/{claimId} {
+      allow get, list: if signedIn() && (resource.data.claimantId == request.auth.uid || resource.data.itemOwnerId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
     match /conversations/{conversationId} {
-      // A signed-in user may check that a deterministic conversation
-      // document does not exist before creating it. Existing conversation
-      // documents remain restricted to their participants.
-      allow get: if signedIn() && (
-        !exists(
-          /databases/$(database)/documents/conversations/$(conversationId)
-        )
-        || isConversationParticipant(resource.data)
-      );
-
-      // Collection queries only return conversations belonging to the user.
-      allow list: if isConversationParticipant(resource.data);
-
-      allow create: if signedIn()
-        && validConversation()
-        && request.auth.uid in request.resource.data.participantIds
-        && request.resource.data.lastMessage == ''
-        && request.resource.data.lastSenderId == ''
-        && request.resource.data.createdAt
-          == request.resource.data.updatedAt
-        && exists(
-          /databases/$(database)/documents/items/$(
-            request.resource.data.itemId
-          )
-        )
-        && request.resource.data.participantIds.hasAll([
-          get(
-            /databases/$(database)/documents/items/$(
-              request.resource.data.itemId
-            )
-          ).data.userId
-        ]);
-
-      allow update: if isConversationParticipant(resource.data)
-        && validConversation()
-        && request.resource.data.participantIds
-          == resource.data.participantIds
-        && request.resource.data.participantNames
-          == resource.data.participantNames
-        && request.resource.data.participantPhotoUrls
-          == resource.data.participantPhotoUrls
-        && request.resource.data.itemId == resource.data.itemId
-        && request.resource.data.itemTitle == resource.data.itemTitle
-        && request.resource.data.itemImageUrl
-          == resource.data.itemImageUrl
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.updatedAt >= resource.data.updatedAt
-        && request.resource.data.diff(resource.data)
-          .affectedKeys()
-          .hasOnly([
-            'updatedAt',
-            'lastMessage',
-            'lastMessageType',
-            'lastSenderId',
-            'lastReadAt'
-          ])
-        && request.resource.data.lastReadAt
-          .diff(resource.data.lastReadAt)
-          .affectedKeys()
-          .hasOnly([request.auth.uid])
-        && (
-          request.resource.data.lastSenderId
-            == resource.data.lastSenderId
-          || request.resource.data.lastSenderId == request.auth.uid
-        );
-
-      allow delete: if false;
-
+      allow read: if signedIn() && request.auth.uid in resource.data.participantIds;
+      allow create, update, delete: if false;
       match /messages/{messageId} {
-        allow read: if isConversationParticipant(
-          get(
-            /databases/$(database)/documents/conversations/$(
-              conversationId
-            )
-          ).data
-        );
-
-        allow create: if isConversationParticipant(
-            get(
-              /databases/$(database)/documents/conversations/$(
-                conversationId
-              )
-            ).data
-          )
-          && validMessage();
-
-        allow update, delete: if false;
+        allow read: if participant(conversationId);
+        allow create, update, delete: if false;
       }
+    }
+    match /blocks/{blockId} {
+      allow get, list: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+    match /notificationPreferences/{uid} {
+      allow get: if isSelf(uid);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+    match /deviceTokens/{tokenId} {
+      allow get, list: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+    match /roles/{uid} {
+      allow get: if isSelf(uid) || admin();
+      allow list: if admin();
+      allow create, update, delete: if false;
+    }
+    // Cases contain only the reported target and the server-captured ±2 message window.
+    match /moderationCases/{caseId} {
+      allow get: if signedIn() && (resource.data.reporterId == request.auth.uid || moderator());
+      allow list: if moderator();
+      allow create, update, delete: if false;
+    }
+    match /auditLogs/{entryId} {
+      allow read: if admin();
+      allow write: if false;
+    }
+    match /deletionJobs/{uid} {
+      allow get: if isSelf(uid) || admin();
+      allow list: if admin();
+      allow write: if false;
+    }
+    match /deletionResults/{referenceId} {
+      allow read: if admin();
+      allow write: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

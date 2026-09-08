@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +60,7 @@ fun ProfileScreen(
 ) {
     var showEdit by remember { mutableStateOf(false) }
     val userItems by viewModel.userItems.collectAsStateWithLifecycle()
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     LaunchedEffect(user.id) { viewModel.loadUserItems(user.id) }
 
@@ -119,9 +121,19 @@ fun ProfileScreen(
                 message?.let { Text(it, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp)) }
                 Text("My reports", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 24.dp, bottom = 4.dp))
             }
-            if (userItems.isEmpty()) {
+            if (syncState.error != null) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(syncState.error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                        OutlinedButton(onClick = viewModel::retryUserItems) { Text("Retry reports") }
+                    }
+                }
+            } else if (syncState.isLoading && userItems.isEmpty()) {
+                item { CircularProgressIndicator(modifier = Modifier.padding(vertical = 12.dp)) }
+            } else if (userItems.isEmpty()) {
                 item { Text("You have not posted a report yet.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            } else {
+            }
+            if (userItems.isNotEmpty()) {
                 items(userItems, key = { it.id }) { item -> ItemCard(item) { onItemClick(item.id) } }
             }
         }

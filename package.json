@@ -1,0 +1,21 @@
+{
+  "name": "cbu-find",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["packages/contracts", "worker", "web", "tools/firestore-tests", "tools/migrations"],
+  "scripts": {
+    "build": "npm run build -w @cbu-find/contracts && npm run build -w @cbu-find/worker && npm run build -w cbu-find-web",
+    "lint": "npm run lint -w @cbu-find/worker && npm run lint -w cbu-find-web",
+    "test": "npm run test -w @cbu-find/contracts && npm run test -w @cbu-find/worker && npm run test:unit -w cbu-find-web",
+    "test:rules": "npm run test -w @cbu-find/firestore-tests",
+    "worker:types": "npm run types -w @cbu-find/worker",
+    "worker:dry-run": "npm run deploy:dry-run -w @cbu-find/worker",
+    "migration:dry-run": "node tools/migrations/migrate.mjs",
+    "migration:apply": "node tools/migrations/migrate.mjs --apply",
+    "backup:firestore": "node tools/migrations/backup.mjs",
+    "audit:phone-auth": "node tools/migrations/audit-phone-auth.mjs",
+    "audit:auth-providers": "node tools/migrations/auth-providers.mjs",
+    "disable:phone-auth": "node tools/migrations/auth-providers.mjs --disable-phone"
+  },
+  "engines": { "node": ">=22.13.0" }
+}
