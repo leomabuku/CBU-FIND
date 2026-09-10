@@ -2,6 +2,10 @@
 
 Cross-platform lost-and-found service for Copperbelt University. The native Android app and responsive Vinext web client share Firebase Authentication and real-time Firestore reads. Sensitive and multi-document changes go through a trusted Cloudflare Worker so the deployment stays compatible with Firebase Spark.
 
+**Project status:** Completed cross-platform portfolio release, September 2026  
+**Live web app:** [cbu-find-web-staging.leokmabuku.workers.dev](https://cbu-find-web-staging.leokmabuku.workers.dev)  
+**Validated journey:** two-account report creation, ownership claims, claim acceptance, private handover messaging, and report resolution
+
 ## Current features
 
 - Email/password and Google sign-in, password recovery, and race-safe profile setup
