@@ -4,6 +4,33 @@ export const USER_STATUSES = ["ACTIVE", "SUSPENDED", "DELETING", "DELETED"] as c
 export const MODERATION_CASE_STATUSES = ["OPEN", "DISMISSED", "ACTIONED"] as const;
 export const USER_ROLES = ["USER", "MODERATOR", "ADMIN"] as const;
 
+// Android and web must publish byte-identical reports, so every user-facing
+// limit and vocabulary lives here. The web client imports these directly; the
+// Kotlin app mirrors them and `worker/tests/platform-parity.test.ts` fails when
+// the two drift apart.
+export const REPORT_CATEGORIES = [
+  "Student ID & Documents",
+  "Phones & Electronics",
+  "Keys",
+  "Bags & Luggage",
+  "Clothing",
+  "Books & Stationery",
+  "Bank Cards & Money",
+  "Jewellery & Accessories",
+  "Other",
+] as const;
+
+/** Maximum photos attached to a lost/found report. */
+export const MAX_REPORT_MEDIA = 6;
+/** Maximum size of any uploaded attachment, before or after processing. */
+export const MAX_MEDIA_BYTES = 20 * 1024 * 1024;
+/** Longest image edge kept when a client compresses before upload. */
+export const IMAGE_MAX_DIMENSION = 1600;
+/** JPEG quality percentage used by both clients when compressing. */
+export const IMAGE_JPEG_QUALITY = 82;
+
+export type ReportCategory = typeof REPORT_CATEGORIES[number];
+
 export type ItemStatus = typeof ITEM_STATUSES[number];
 export type ClaimStatus = typeof CLAIM_STATUSES[number];
 export type UserStatus = typeof USER_STATUSES[number];

@@ -2,7 +2,7 @@
 
 import { getToken as getAppCheckToken } from "firebase/app-check";
 import { signOut } from "firebase/auth";
-import type { ApiResponse, ErrorCode, MediaAsset } from "@cbu-find/contracts";
+import { IMAGE_JPEG_QUALITY, IMAGE_MAX_DIMENSION, MAX_MEDIA_BYTES, type ApiResponse, type ErrorCode, type MediaAsset } from "@cbu-find/contracts";
 import { appCheck, auth, workerBaseUrl } from "./firebase";
 
 export class ClientError extends Error {
@@ -49,11 +49,49 @@ async function apiAttempt<T>(path: string, init: RequestInit, refreshTokens: boo
   return result.data;
 }
 
+/** Scale a width/height pair to fit inside `max`, never enlarging the image. */
+export function fitWithin(width: number, height: number, max: number = IMAGE_MAX_DIMENSION): { width: number; height: number } {
+  const longest = Math.max(width, height);
+  if (!longest || longest <= max) return { width: Math.round(width), height: Math.round(height) };
+  const ratio = max / longest;
+  return { width: Math.round(width * ratio), height: Math.round(height * ratio) };
+}
+
+/**
+ * Mirrors the Android ImageCompressor: resize the longest edge to
+ * IMAGE_MAX_DIMENSION and re-encode as JPEG at IMAGE_JPEG_QUALITY, so a report
+ * published on iOS or desktop costs the same bandwidth as one published on
+ * Android. Non-images, and environments without a DOM, pass through unchanged.
+ */
+export async function compressImage(file: File): Promise<Blob> {
+  if (!file.type.startsWith("image/") || typeof document === "undefined") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const size = fitWithin(bitmap.width, bitmap.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = size.width;
+    canvas.height = size.height;
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, size.width, size.height);
+    bitmap.close?.();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", IMAGE_JPEG_QUALITY / 100));
+    // Never make an already-small file larger.
+    return blob && blob.size < file.size ? blob : file;
+  } catch {
+    return file;
+  }
+}
+
 export async function uploadSigned(file: File, folder: "reports" | "profiles" | "messages"): Promise<MediaAsset> {
-  if (file.size > 20 * 1024 * 1024) throw new ClientError("VALIDATION_FAILED", "Attachments must be 20 MB or smaller.", false, "WEB-FILE-SIZE");
+  if (file.size > MAX_MEDIA_BYTES) throw new ClientError("VALIDATION_FAILED", "Attachments must be 20 MB or smaller.", false, "WEB-FILE-SIZE");
+  // Android compresses report and profile photos only, so chat attachments stay
+  // byte-identical here: re-encoding a screenshot or GIF would lose quality.
+  const upload = folder === "messages" ? file : await compressImage(file);
+  const uploadName = upload === file ? file.name : `${file.name.replace(/\.[^.]+$/, "")}.jpg`;
   const signing = await api<{ cloudName: string; apiKey: string; signature: string; signatureAlgorithm: string; timestamp: number; folder: string; context: string; resourceType: string; expiresAt: number }>("/v1/uploads/sign", { method: "POST", body: JSON.stringify({ folder, resourceType: "auto" }) });
   const body = new FormData();
-  body.append("file", file); body.append("api_key", signing.apiKey); body.append("timestamp", String(signing.timestamp)); body.append("signature", signing.signature); body.append("signature_algorithm", signing.signatureAlgorithm); body.append("folder", signing.folder); body.append("context", signing.context);
+  body.append("file", upload, uploadName); body.append("api_key", signing.apiKey); body.append("timestamp", String(signing.timestamp)); body.append("signature", signing.signature); body.append("signature_algorithm", signing.signatureAlgorithm); body.append("folder", signing.folder); body.append("context", signing.context);
   const response = await fetch(`https://api.cloudinary.com/v1_1/${signing.cloudName}/auto/upload`, { method: "POST", body });
   const result = await response.json() as { secure_url?: string; public_id?: string; resource_type?: "image" | "video" | "raw"; format?: string; bytes?: number; width?: number; height?: number; original_filename?: string; error?: { message?: string } };
   if (!response.ok || !result.secure_url) throw new ClientError("DEPENDENCY_UNAVAILABLE", "The media upload failed. Retry, or continue without an attachment.", true, response.headers.get("x-cld-error") ?? "CLOUDINARY-UPLOAD");

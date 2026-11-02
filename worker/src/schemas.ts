@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_MEDIA_BYTES, MAX_REPORT_MEDIA } from "@cbu-find/contracts";
 
 const trimmed = (max: number) => z.string().trim().max(max);
 export const mediaAssetSchema = z.object({
@@ -6,7 +7,7 @@ export const mediaAssetSchema = z.object({
   publicId: trimmed(500).optional(),
   resourceType: z.enum(["image", "video", "raw", "auto"]).optional(),
   format: trimmed(32).optional(),
-  bytes: z.number().int().nonnegative().max(20 * 1024 * 1024).optional(),
+  bytes: z.number().int().nonnegative().max(MAX_MEDIA_BYTES).optional(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   originalName: trimmed(255).optional(),
@@ -30,7 +31,7 @@ export const reportSchema = z.object({
   location: trimmed(160).min(2),
   date: z.number().int().positive(),
   contactInfo: trimmed(300).default(""),
-  media: z.array(mediaAssetSchema).max(6).default([]),
+  media: z.array(mediaAssetSchema).max(MAX_REPORT_MEDIA).default([]),
 });
 
 export const claimSchema = z.object({

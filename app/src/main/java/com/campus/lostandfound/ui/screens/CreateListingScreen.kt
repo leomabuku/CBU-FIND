@@ -50,6 +50,10 @@ import com.campus.lostandfound.data.model.ItemType
 import com.campus.lostandfound.ui.viewmodel.CreateItemViewModel
 import coil.compose.AsyncImage
 
+// Keep in sync with MAX_REPORT_MEDIA in packages/contracts (enforced by
+// worker/tests/platform-parity.test.ts).
+private const val MAX_REPORT_PHOTOS = 6
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateListingScreen(
@@ -70,7 +74,7 @@ fun CreateListingScreen(
     val submitError by viewModel.error.collectAsStateWithLifecycle()
     val progressMessage by viewModel.progressMessage.collectAsStateWithLifecycle()
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        imageUris = (imageUris + uris).distinct().take(3)
+        imageUris = (imageUris + uris).distinct().take(MAX_REPORT_PHOTOS)
     }
 
     Scaffold(
@@ -155,12 +159,12 @@ fun CreateListingScreen(
             )
             Spacer(Modifier.height(10.dp))
             OutlinedButton(
-                enabled = !isSubmitting && imageUris.size < 3,
+                enabled = !isSubmitting && imageUris.size < MAX_REPORT_PHOTOS,
                 onClick = { imagePicker.launch("image/*") },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
-                Text(if (imageUris.isEmpty()) " Add up to 3 photos" else " Add another photo (${imageUris.size}/3)")
+                Text(if (imageUris.isEmpty()) " Add up to $MAX_REPORT_PHOTOS photos" else " Add another photo (${imageUris.size}/$MAX_REPORT_PHOTOS)")
             }
             if (imageUris.isNotEmpty()) {
                 Text(
