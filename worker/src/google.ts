@@ -9,6 +9,8 @@ const SCOPES = [
   "https://www.googleapis.com/auth/datastore",
   "https://www.googleapis.com/auth/firebase.messaging",
   "https://www.googleapis.com/auth/identitytoolkit",
+  "https://www.googleapis.com/auth/devstorage.read_write",
+  "https://www.googleapis.com/auth/cloud-vision",
 ].join(" ");
 
 export async function googleAccessToken(env: Env): Promise<string> {

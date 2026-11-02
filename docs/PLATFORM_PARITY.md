@@ -35,6 +35,9 @@ Verified against source on both sides (2026-11-02).
 | Moderation case queue | `ModerationScreen.kt` | `ModerationScreen` | |
 | Moderation actions | `ModerationScreen.kt` | `ModerationScreen` | Remove/restore report, lock/unlock chat, suspend/reactivate user |
 | Role management (ADMIN) | `ModerationScreen.kt` | `ModerationScreen` | Last-admin protection enforced by the Worker |
+| Student-ID verification | `VerificationScreen.kt` | `VerificationPanel` | Same `/v1/verification/*` endpoints and states |
+| Verification review queue | `ModerationScreen.kt` | `ModerationVerifications` | Document bytes only via the authenticated endpoint |
+| Account deletion without the app | n/a | `/delete-account` | Android deletes in-app; the web page covers uninstalled users |
 
 ## 2. Intentional differences
 

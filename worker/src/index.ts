@@ -3,6 +3,7 @@ import { AppError, errorResponse, normalizeError } from "./errors";
 import { verifyRequest } from "./auth";
 import { FirestoreRest } from "./firestore";
 import { registerDomainRoutes, type AppBindings } from "./domain";
+import { registerVerificationRoutes } from "./verification";
 import { processDeletion, processNotification } from "./queues";
 import type { DeletionJob, NotificationJob } from "@cbu-find/contracts";
 
@@ -62,9 +63,11 @@ app.use("/v1/*", async (c, next) => {
   if (!limited.success) throw new AppError("RATE_LIMITED", "You are doing that too quickly. Wait a moment and try again.", 429, true);
   const db = new FirestoreRest(c.env);
   c.set("uid", auth.uid); c.set("email", auth.email); c.set("db", db);
+  c.set("user", null);
   if (c.req.path !== "/v1/profile/bootstrap") {
     const user = await db.get(`users/${auth.uid}`);
     if (!user) throw new AppError("AUTH_REQUIRED", "Your profile is not ready. Sign out, sign in, and retry.", 401);
+    c.set("user", user);
     if (user.status === "SUSPENDED" && c.req.path !== "/v1/account-deletion") throw new AppError("ACCOUNT_SUSPENDED", "This account is suspended. Contact a CBU Find administrator if you think this is a mistake.", 403);
     if (user.status === "DELETING" && c.req.path !== "/v1/account-deletion") throw new AppError("ACCOUNT_DELETING", "Account deletion is in progress. New changes are disabled.", 409);
   }
@@ -72,6 +75,7 @@ app.use("/v1/*", async (c, next) => {
 });
 
 registerDomainRoutes(app);
+registerVerificationRoutes(app);
 app.notFound((c) => errorResponse(new AppError("NOT_FOUND", "That API endpoint does not exist.", 404), c.get("referenceId") || crypto.randomUUID()));
 
 const worker: ExportedHandler<Env> = {

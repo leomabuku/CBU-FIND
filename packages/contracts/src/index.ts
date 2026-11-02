@@ -4,6 +4,58 @@ export const USER_STATUSES = ["ACTIVE", "SUSPENDED", "DELETING", "DELETED"] as c
 export const MODERATION_CASE_STATUSES = ["OPEN", "DISMISSED", "ACTIONED"] as const;
 export const USER_ROLES = ["USER", "MODERATOR", "ADMIN"] as const;
 
+// Membership is deliberately separate from the account role. A moderator is not
+// automatically a verified student, and a verified student is never a moderator.
+export const MEMBERSHIP_STATUSES = ["UNVERIFIED", "PENDING", "VERIFIED", "REJECTED"] as const;
+export const VERIFICATION_STATUSES = [
+  "DRAFT",
+  "PROCESSING",
+  "EXTRACTION_FAILED",
+  "PENDING_RECORD_MATCH",
+  "PENDING_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "NEEDS_RESUBMISSION",
+] as const;
+
+export type MembershipStatus = typeof MEMBERSHIP_STATUSES[number];
+export type VerificationStatus = typeof VERIFICATION_STATUSES[number];
+export type VerificationDecision = "APPROVE" | "REJECT" | "NEEDS_RESUBMISSION";
+export type RecordMatchOutcome = "MATCHED" | "NO_MATCH" | "AMBIGUOUS" | "UNAVAILABLE";
+
+/** Fields a student confirms after OCR, before a moderator reviews them. */
+export interface VerificationFields {
+  studentNumber: string;
+  fullName: string;
+  programme: string;
+  academicYear: string;
+}
+
+/** 0–1 per extracted field. Low confidence never blocks submission; it routes to review. */
+export type FieldConfidence = Partial<Record<keyof VerificationFields, number>>;
+
+export interface VerificationRequestSummary {
+  id: string;
+  status: VerificationStatus;
+  fields: VerificationFields;
+  confidence: FieldConfidence;
+  ocrProvider: string;
+  ocrConfidence: number;
+  matchOutcome: RecordMatchOutcome;
+  matchConfidence: number;
+  submittedAt: number;
+  updatedAt: number;
+  decidedAt?: number;
+  decisionReason?: string;
+}
+
+export interface MembershipRecord {
+  status: MembershipStatus;
+  institutionId: string;
+  updatedAt: number;
+  request: VerificationRequestSummary | null;
+}
+
 // Android and web must publish byte-identical reports, so every user-facing
 // limit and vocabulary lives here. The web client imports these directly; the
 // Kotlin app mirrors them and `worker/tests/platform-parity.test.ts` fails when
@@ -40,7 +92,7 @@ export type UserRole = typeof USER_ROLES[number];
 export type ErrorCode =
   | "AUTH_REQUIRED" | "AUTH_EXPIRED" | "APP_CHECK_REQUIRED" | "PERMISSION_DENIED"
   | "ACCOUNT_SUSPENDED" | "ACCOUNT_DELETING" | "NOT_FOUND" | "ALREADY_EXISTS"
-  | "VALIDATION_FAILED" | "BLOCKED" | "CONVERSATION_LOCKED" | "CLAIM_CONFLICT"
+  | "VALIDATION_FAILED" | "BLOCKED" | "CONVERSATION_LOCKED" | "CLAIM_CONFLICT" | "MEMBERSHIP_REQUIRED"
   | "RATE_LIMITED" | "CAPACITY_EXCEEDED" | "DEPENDENCY_UNAVAILABLE"
   | "CONFIGURATION_REQUIRED" | "INTERNAL_ERROR";
 

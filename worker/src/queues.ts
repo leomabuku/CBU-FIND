@@ -2,6 +2,7 @@ import type { DeletionJob, MediaAsset, NotificationJob } from "@cbu-find/contrac
 import { FirestoreRest, type PlainDocument } from "./firestore";
 import { googleAccessToken } from "./google";
 import { AppError } from "./errors";
+import { purgeVerificationData } from "./verification";
 
 export async function processNotification(env: Env, job: NotificationJob): Promise<void> {
   const db = new FirestoreRest(env);
@@ -148,6 +149,10 @@ export async function processDeletion(env: Env, job: DeletionJob): Promise<void>
 
   stage = "write-anonymized-records";
   for (let index = 0; index < writes.length; index += 400) await db.commit(writes.slice(index, index + 400));
+  stage = "purge-verification-documents";
+  // Identity documents are the most sensitive data CBU Find holds; delete the
+  // private objects and duplicate-registry entries before the auth account.
+  await purgeVerificationData(env, db, job.uid);
   stage = "delete-auth-account";
   await deleteFirebaseAccount(env, job.uid);
   stage = "record-result";

@@ -63,6 +63,7 @@ import com.campus.lostandfound.data.model.Item
 import com.campus.lostandfound.data.model.ItemCategories
 import com.campus.lostandfound.data.model.ItemStatus
 import com.campus.lostandfound.data.model.ItemType
+import com.campus.lostandfound.data.model.MembershipStatus
 import com.campus.lostandfound.data.repository.SyncState
 import com.campus.lostandfound.ui.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
@@ -79,7 +80,9 @@ fun HomeDashboardScreen(
     onInboxClick: () -> Unit,
     onClaimsClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onModerationClick: () -> Unit
+    onModerationClick: () -> Unit,
+    membershipStatus: MembershipStatus = MembershipStatus.UNVERIFIED,
+    onVerificationClick: () -> Unit = {}
 ) {
     val reports by viewModel.items.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
@@ -142,6 +145,35 @@ fun HomeDashboardScreen(
                 Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 20.dp)) {
                     Text("Good evening", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
                     Text("Campus reports", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
+                }
+            }
+
+            if (membershipStatus != MembershipStatus.VERIFIED) {
+                item {
+                    Card(
+                        onClick = onVerificationClick,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 6.dp)
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(
+                                when (membershipStatus) {
+                                    MembershipStatus.PENDING -> "Verification awaiting review"
+                                    MembershipStatus.REJECTED -> "Verification not approved — try again"
+                                    else -> "Verify your student ID to report and claim"
+                                },
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                when (membershipStatus) {
+                                    MembershipStatus.PENDING -> "You can browse while a moderator reviews your document."
+                                    MembershipStatus.REJECTED -> "Open verification to see the moderator note and resubmit."
+                                    else -> "Reporting and claiming are limited to verified CBU students. Tap to start."
+                                },
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
                 }
             }
 

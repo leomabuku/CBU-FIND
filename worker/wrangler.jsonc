@@ -16,6 +16,9 @@
     "FIREBASE_PROJECT_NUMBER": "844398747634",
     "FIREBASE_APP_IDS": "1:844398747634:android:fadeda773c8800078e556b,1:844398747634:web:a763726255f3db478e556b",
     "CLOUDINARY_CLOUD_NAME": "campuslostandfound",
+    "FIREBASE_STORAGE_BUCKET": "cbu-lost-and-found.firebasestorage.app",
+    "OCR_PROVIDER": "none",
+    "CBU_RECORD_API_URL": "",
     "WEB_APP_URL": "http://localhost:3000",
     "CORS_ORIGINS": "http://localhost:3000,http://localhost:5173"
   },
@@ -43,6 +46,9 @@
         "FIREBASE_PROJECT_NUMBER": "844398747634",
         "FIREBASE_APP_IDS": "1:844398747634:android:fadeda773c8800078e556b,1:844398747634:web:a763726255f3db478e556b",
         "CLOUDINARY_CLOUD_NAME": "campuslostandfound",
+        "FIREBASE_STORAGE_BUCKET": "cbu-lost-and-found.firebasestorage.app",
+        "OCR_PROVIDER": "none",
+        "CBU_RECORD_API_URL": "",
         "WEB_APP_URL": "https://cbu-find-web-staging.leokmabuku.workers.dev",
         "CORS_ORIGINS": "http://localhost:3000,http://localhost:5173,https://cbu-find-web-staging.leokmabuku.workers.dev"
       },
@@ -70,6 +76,9 @@
         "FIREBASE_PROJECT_NUMBER": "844398747634",
         "FIREBASE_APP_IDS": "1:844398747634:android:fadeda773c8800078e556b,1:844398747634:web:a763726255f3db478e556b",
         "CLOUDINARY_CLOUD_NAME": "campuslostandfound",
+        "FIREBASE_STORAGE_BUCKET": "cbu-lost-and-found.firebasestorage.app",
+        "OCR_PROVIDER": "none",
+        "CBU_RECORD_API_URL": "",
         "WEB_APP_URL": "https://cbu-find-web-production.leokmabuku.workers.dev",
         "CORS_ORIGINS": "https://cbu-find-web-production.leokmabuku.workers.dev"
       },

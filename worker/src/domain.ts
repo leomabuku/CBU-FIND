@@ -6,7 +6,7 @@ import { FirestoreRest, type PlainDocument } from "./firestore";
 import { claimSchema, mediaAssetSchema, messageEditSchema, messageSchema, notificationPreferencesSchema, profileSchema, reportAbuseSchema, reportSchema } from "./schemas";
 import { destroyCloudinaryAsset } from "./queues";
 
-export type AppBindings = { Bindings: Env; Variables: { uid: string; email: string; referenceId: string; startedAt: number; db: FirestoreRest } };
+export type AppBindings = { Bindings: Env; Variables: { uid: string; email: string; referenceId: string; startedAt: number; db: FirestoreRest; user: PlainDocument | null } };
 
 function ok<T>(data: T, status = 200): Response {
   const body: ApiResponse<T> = { ok: true, data };
@@ -33,6 +33,18 @@ async function requireModerator(db: FirestoreRest, uid: string): Promise<UserRol
 
 async function requireAdmin(db: FirestoreRest, uid: string): Promise<void> {
   if (await roleFor(db, uid) !== "ADMIN") throw new AppError("PERMISSION_DENIED", "Administrator access is required.", 403);
+}
+
+/**
+ * Reporting, claiming and messaging require verified student membership.
+ * Moderators and administrators are exempt so they can operate the service even
+ * when they are not CBU students themselves. This is enforced server-side;
+ * hiding buttons in a client is never treated as security.
+ */
+async function requireVerifiedMember(c: Context<AppBindings>): Promise<void> {
+  if (c.get("user")?.membershipStatus === "VERIFIED") return;
+  if (await roleFor(c.get("db"), c.get("uid")) !== "USER") return;
+  throw new AppError("MEMBERSHIP_REQUIRED", "Verify your CBU student membership to report items, claim them or message other students.", 403);
 }
 
 async function assertNotBlocked(db: FirestoreRest, first: string, second: string, transaction?: string): Promise<void> {
@@ -97,7 +109,9 @@ export function registerDomainRoutes(app: Hono<AppBindings>): void {
     const body = await input(c.req.raw, profileSchema);
     const existing = await db.get(`users/${uid}`);
     if (body.photoAsset) assertOwnedMedia([body.photoAsset], uid, "profiles", c.env.CLOUDINARY_CLOUD_NAME);
-    const profile = { ...body, photoUrl: body.photoAsset?.secureUrl ?? existing?.photoUrl ?? "", photoAsset: body.photoAsset ?? existing?.photoAsset, email: c.get("email"), status: typeof existing?.status === "string" ? existing.status : "ACTIVE", createdAt: typeof existing?.createdAt === "number" ? existing.createdAt : now, updatedAt: now };
+    // Membership is decided only by the verification workflow, never by a client.
+    // bootstrap replaces the whole document, so carry these forward explicitly.
+    const profile = { ...body, photoUrl: body.photoAsset?.secureUrl ?? existing?.photoUrl ?? "", photoAsset: body.photoAsset ?? existing?.photoAsset, email: c.get("email"), status: typeof existing?.status === "string" ? existing.status : "ACTIVE", membershipStatus: typeof existing?.membershipStatus === "string" ? existing.membershipStatus : "UNVERIFIED", membershipUpdatedAt: typeof existing?.membershipUpdatedAt === "number" ? existing.membershipUpdatedAt : now, institutionId: typeof existing?.institutionId === "string" ? existing.institutionId : "cbu", verificationRequestId: typeof existing?.verificationRequestId === "string" ? existing.verificationRequestId : "", createdAt: typeof existing?.createdAt === "number" ? existing.createdAt : now, updatedAt: now };
     await db.commit([
       db.setWrite(`users/${uid}`, profile),
       db.setWrite(`publicProfiles/${uid}`, publicProfile(profile, now)),
@@ -120,6 +134,7 @@ export function registerDomainRoutes(app: Hono<AppBindings>): void {
   app.post("/v1/uploads/sign", async (c) => {
     await rateLimit(c.env.SENSITIVE_RATE_LIMITER, `${c.get("uid")}:upload-sign`);
     const body = await input(c.req.raw, z.object({ folder: z.enum(["reports", "profiles", "messages"]), resourceType: z.enum(["image", "video", "raw", "auto"]).default("auto") }));
+    if (body.folder === "reports") await requireVerifiedMember(c);
     const timestamp = Math.floor(Date.now() / 1000);
     const folder = `cbu_find/${body.folder}/${c.get("uid")}`;
     const context = `app=cbu_find|uploaded_by=${c.get("uid")}|kind=${body.folder}`;
@@ -130,6 +145,7 @@ export function registerDomainRoutes(app: Hono<AppBindings>): void {
   });
 
   app.post("/v1/reports", async (c) => {
+    await requireVerifiedMember(c);
     const uid = c.get("uid"), now = Date.now(), db = c.get("db"), body = await input(c.req.raw, reportSchema);
     assertOwnedMedia(body.media, uid, "reports", c.env.CLOUDINARY_CLOUD_NAME);
     const id = crypto.randomUUID();
@@ -172,6 +188,7 @@ export function registerDomainRoutes(app: Hono<AppBindings>): void {
   });
 
   app.post("/v1/claims", async (c) => {
+    await requireVerifiedMember(c);
     const uid = c.get("uid"), db = c.get("db"), body = await input(c.req.raw, claimSchema), now = Date.now();
     await rateLimit(c.env.SENSITIVE_RATE_LIMITER, `${uid}:claim`);
     const item = assertFound(await db.get(`items/${body.itemId}`), "That report is no longer available.");
@@ -187,6 +204,7 @@ export function registerDomainRoutes(app: Hono<AppBindings>): void {
   });
 
   app.post("/v1/claims/:id/action", async (c) => {
+    await requireVerifiedMember(c);
     const uid = c.get("uid"), db = c.get("db"), id = c.req.param("id"), now = Date.now();
     const { action } = await input(c.req.raw, z.object({ action: z.enum(["ACCEPT", "REJECT", "CANCEL"]) }));
     await rateLimit(c.env.SENSITIVE_RATE_LIMITER, `${uid}:claim-action`);
@@ -226,6 +244,7 @@ export function registerDomainRoutes(app: Hono<AppBindings>): void {
   });
 
   app.post("/v1/conversations/:id/messages", async (c) => {
+    await requireVerifiedMember(c);
     const uid = c.get("uid"), db = c.get("db"), id = c.req.param("id"), now = Date.now();
     await rateLimit(c.env.MESSAGE_RATE_LIMITER, `${uid}:message`);
     const body = await input(c.req.raw, messageSchema), conversation = assertFound(await db.get(`conversations/${id}`), "That conversation is no longer available.");

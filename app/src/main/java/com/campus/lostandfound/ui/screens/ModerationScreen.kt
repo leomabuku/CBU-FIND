@@ -33,18 +33,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.campus.lostandfound.data.model.ModerationCase
+import com.campus.lostandfound.data.model.VerificationSummary
+import com.campus.lostandfound.ui.viewmodel.VerificationViewModel
 import com.campus.lostandfound.ui.viewmodel.ModerationViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ModerationScreen(currentUserId: String, viewModel: ModerationViewModel, onBack: () -> Unit) {
+fun ModerationScreen(currentUserId: String, viewModel: ModerationViewModel, verificationViewModel: VerificationViewModel, onBack: () -> Unit) {
     val role by viewModel.role.collectAsStateWithLifecycle(); val cases by viewModel.cases.collectAsStateWithLifecycle(); val sync by viewModel.syncState.collectAsStateWithLifecycle(); val error by viewModel.error.collectAsStateWithLifecycle()
+    val verificationQueue by verificationViewModel.queue.collectAsStateWithLifecycle()
+    val verificationBusy by verificationViewModel.isBusy.collectAsStateWithLifecycle()
     var targetUid by remember { mutableStateOf("") }
     LaunchedEffect(currentUserId) { viewModel.load(currentUserId) }
+    LaunchedEffect(currentUserId) { verificationViewModel.loadQueue() }
     Scaffold(topBar = { TopAppBar(title = { Text("Moderation") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }) }) { padding ->
         if (role == "USER") ActionableFailure("Moderator access required", error ?: "This area is limited to moderators and administrators.", onBack, Modifier.padding(padding))
         else LazyColumn(Modifier.padding(padding).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { Text("$role tools", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(16.dp)) }
+            item { VerificationQueueCard(verificationQueue, verificationBusy) { id, decision, reason -> verificationViewModel.decide(id, decision, reason) } }
             if (role == "ADMIN") item { Card(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) { Column(Modifier.padding(14.dp)) { Text("Role management", fontWeight = FontWeight.Bold); OutlinedTextField(targetUid, { targetUid = it }, label = { Text("Firebase user UID") }, modifier = Modifier.fillMaxWidth()); Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { Button(enabled = targetUid.isNotBlank(), onClick = { viewModel.assignRole(targetUid, "MODERATOR") }) { Text("Moderator") }; TextButton(enabled = targetUid.isNotBlank(), onClick = { viewModel.assignRole(targetUid, "ADMIN") }) { Text("Admin") }; TextButton(enabled = targetUid.isNotBlank(), onClick = { viewModel.assignRole(targetUid, "USER") }) { Text("User") } }; Text("The Worker prevents removing the last administrator.", style = MaterialTheme.typography.labelMedium) } } }
             error?.let { item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) } }
             sync.error?.let { item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) } }
@@ -68,4 +74,51 @@ fun ModerationScreen(currentUserId: String, viewModel: ModerationViewModel, onBa
         OutlinedTextField(userTargetUid, { userTargetUid = it.trim() }, label = { Text("Target user UID for account action") }, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { TextButton(enabled = userTargetUid.isNotBlank(), onClick = { viewModel.action(record, "SUSPEND_USER", userTargetUid) }) { Text("Suspend user") }; TextButton(enabled = userTargetUid.isNotBlank(), onClick = { viewModel.action(record, "REACTIVATE_USER", userTargetUid) }) { Text("Reactivate") } }
     } }
+}
+
+
+/**
+ * Student ID review queue. The document itself is not rendered here: it can only
+ * be fetched through the authenticated Worker endpoint, and moderators compare
+ * the confirmed fields with the card they see via the web or a secure viewer.
+ */
+@Composable
+private fun VerificationQueueCard(
+    queue: List<VerificationSummary>,
+    busy: Boolean,
+    onDecide: (String, String, String) -> Unit
+) {
+    var reasons by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    Card(Modifier.fillMaxWidth().padding(horizontal = 14.dp), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Student ID verification", fontWeight = FontWeight.Bold)
+            if (queue.isEmpty()) {
+                Text("No student ID requests are awaiting review.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            queue.forEach { request ->
+                Text(request.fullName.ifBlank { "Unnamed submission" }, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Number ${request.studentNumber.ifBlank { "—" }} · ${request.programme.ifBlank { "programme not given" }} · ${request.academicYear.ifBlank { "year not given" }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Read confidence ${(request.studentNumberConfidence * 100).toInt()}% · record match ${request.matchOutcome.lowercase().replace('_', ' ')}",
+                    style = MaterialTheme.typography.labelMedium
+                )
+                OutlinedTextField(
+                    value = reasons[request.id].orEmpty(),
+                    onValueChange = { value -> reasons = reasons + (request.id to value) },
+                    label = { Text("Reason (required to reject)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(enabled = !busy, onClick = { onDecide(request.id, "APPROVE", reasons[request.id].orEmpty()) }) { Text("Approve") }
+                    TextButton(enabled = !busy, onClick = { onDecide(request.id, "NEEDS_RESUBMISSION", reasons[request.id].orEmpty()) }) { Text("New document") }
+                    TextButton(enabled = !busy, onClick = { onDecide(request.id, "REJECT", reasons[request.id].orEmpty()) }) { Text("Reject") }
+                }
+            }
+        }
+    }
 }

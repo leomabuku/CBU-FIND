@@ -12,6 +12,9 @@ import com.campus.lostandfound.data.model.Item
 import com.campus.lostandfound.data.model.ItemStatus
 import com.campus.lostandfound.data.model.ItemType
 import com.campus.lostandfound.data.model.MediaAsset
+import com.campus.lostandfound.data.model.Membership
+import com.campus.lostandfound.data.model.VerificationDraft
+import com.campus.lostandfound.data.model.VerificationSummary
 import com.campus.lostandfound.data.model.MessageMediaType
 import com.campus.lostandfound.data.model.ModerationCase
 import com.campus.lostandfound.data.model.User
@@ -35,6 +38,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -72,6 +76,66 @@ class AppRepository(
 
     suspend fun updateUser(user: User) = trusted("update your profile") {
         api.request("/v1/profile", "PATCH", user.profileJson())
+        Unit
+    }
+
+    suspend fun getMembership(): Membership = trusted("load your membership") {
+        Membership.fromJson(api.request("/v1/membership", "GET"))
+    }
+
+    /**
+     * Reads the chosen student ID, compresses it exactly like a report photo and
+     * sends it to the trusted Worker, which stores it privately and returns the
+     * fields it could read. OCR output is never treated as proof of membership.
+     */
+    suspend fun scanStudentId(uri: Uri): VerificationDraft = withContext(Dispatchers.IO) {
+        val bytes = ImageCompressor.compressToJpeg(context, uri)
+        require(bytes.size <= 5 * 1024 * 1024) { "The card photo must be 5 MB or smaller." }
+        val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+        val result = api.request(
+            "/v1/verification/scan",
+            "POST",
+            JSONObject().put("imageBase64", base64).put("contentType", "image/jpeg")
+        )
+        val confidence = result.optJSONObject("confidence")
+        VerificationDraft(
+            requestId = result.getString("requestId"),
+            studentNumber = result.optString("studentNumber"),
+            fullName = result.optString("fullName"),
+            programme = result.optString("programme"),
+            academicYear = result.optString("academicYear"),
+            studentNumberConfidence = confidence?.optDouble("studentNumber", 0.0) ?: 0.0,
+            extractionAvailable = result.optBoolean("extractionAvailable", false)
+        )
+    }
+
+    suspend fun confirmVerification(draft: VerificationDraft): String = trusted("submit your verification") {
+        val fields = JSONObject()
+            .put("studentNumber", draft.studentNumber.trim())
+            .put("fullName", draft.fullName.trim())
+            .put("programme", draft.programme.trim())
+            .put("academicYear", draft.academicYear.trim())
+        val result = api.request(
+            "/v1/verification/confirm",
+            "POST",
+            JSONObject().put("requestId", draft.requestId).put("fields", fields)
+        )
+        result.optString("status")
+    }
+
+    suspend fun getVerificationQueue(): List<VerificationSummary> = trusted("load the verification queue") {
+        val rows = api.request("/v1/admin/verifications", "GET").optJSONArray("requests") ?: JSONArray()
+        (0 until rows.length()).mapNotNull { index ->
+            VerificationSummary.fromJson(rows.optJSONObject(index))
+        }
+    }
+
+    suspend fun decideVerification(requestId: String, decision: String, reason: String) = trusted("decide this verification") {
+        api.request(
+            "/v1/admin/verifications/$requestId/decision",
+            "POST",
+            JSONObject().put("decision", decision).put("reason", reason)
+        )
         Unit
     }
 

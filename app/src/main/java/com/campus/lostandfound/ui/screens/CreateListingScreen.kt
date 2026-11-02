@@ -59,7 +59,9 @@ private const val MAX_REPORT_PHOTOS = 6
 fun CreateListingScreen(
     viewModel: CreateItemViewModel,
     userId: String,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    canReport: Boolean = true,
+    onVerifyClick: () -> Unit = {}
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -75,6 +77,25 @@ fun CreateListingScreen(
     val progressMessage by viewModel.progressMessage.collectAsStateWithLifecycle()
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         imageUris = (imageUris + uris).distinct().take(MAX_REPORT_PHOTOS)
+    }
+
+    if (!canReport) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Create report") },
+                    navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }
+                )
+            }
+        ) { padding ->
+            ActionableFailure(
+                title = "Verify your student membership first",
+                message = "Reporting is limited to verified CBU students so the campus feed stays trustworthy. Open verification to upload a photo of your student ID.",
+                onRetry = onVerifyClick,
+                modifier = Modifier.padding(padding)
+            )
+        }
+        return
     }
 
     Scaffold(

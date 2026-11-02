@@ -8,6 +8,8 @@ Cross-platform lost-and-found service for Copperbelt University. The native Andr
 
 ## Current features
 
+- Verified student membership: private student-ID upload, OCR-assisted field extraction with per-field confidence, hybrid record matching with mandatory moderator review, and server-enforced member-only reporting, claiming and messaging
+- Public account-deletion page that works without the app, plus in-app deletion on Android and web
 - Email/password and Google sign-in, password recovery, and race-safe profile setup
 - Lost/found report feed, search, filters, signed media, private contact records, and status updates
 - Deterministic claims; the report owner must accept before a private conversation opens
@@ -55,3 +57,9 @@ $env:JAVA_HOME='C:\path\to\jdk-17'
 ```
 
 See `docs/DEPLOYMENT.md` for migration, staging, deployment, quota monitoring, and provider-disable order.
+
+- `docs/PLATFORM_PARITY.md` — what Android and web each do, and how drift is prevented
+- `docs/VERIFICATION_WORKFLOW.md` — student and moderator verification, privacy, retention
+- `docs/PRODUCTION_READINESS_AUDIT.md` — prioritised audit of this repository
+- `docs/WEB_APP_CONNECTION.md` — how the web app reaches the backend
+- `docs/RELEASE_CHECKLIST.md` — pre-release, Play Store and rollback steps

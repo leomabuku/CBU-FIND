@@ -66,6 +66,17 @@ service cloud.firestore {
       allow list: if admin();
       allow create, update, delete: if false;
     }
+    // Student identity documents are private to their owner and to moderators.
+    // Clients never write verification state; only the trusted Worker may.
+    match /verificationRequests/{requestId} {
+      allow get: if signedIn() && (resource.data.uid == request.auth.uid || moderator());
+      allow list: if moderator();
+      allow create, update, delete: if false;
+    }
+    // Uniqueness registry for verified student numbers. Never readable by clients.
+    match /studentDirectory/{studentNumber} {
+      allow read, write: if false;
+    }
     // Cases contain only the reported target and the server-captured ±2 message window.
     match /moderationCases/{caseId} {
       allow get: if signedIn() && (resource.data.reporterId == request.auth.uid || moderator());

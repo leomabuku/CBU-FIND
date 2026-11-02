@@ -29,6 +29,8 @@ import com.campus.lostandfound.ui.viewmodel.ModerationViewModel
 import com.campus.lostandfound.ui.screens.ClaimsScreen
 import com.campus.lostandfound.ui.screens.SettingsScreen
 import com.campus.lostandfound.ui.screens.ModerationScreen
+import com.campus.lostandfound.ui.screens.VerificationScreen
+import com.campus.lostandfound.ui.viewmodel.VerificationViewModel
 import com.campus.lostandfound.ui.theme.ThemeMode
 
 @Composable
@@ -42,6 +44,12 @@ fun CampusApp(
     val authViewModel: AuthViewModel = viewModel(factory = AppViewModelProvider.Factory)
     val currentUser by authViewModel.currentUser.collectAsStateWithLifecycle()
     val isAuthReady by authViewModel.isAuthReady.collectAsStateWithLifecycle()
+    val verificationViewModel: VerificationViewModel = viewModel(factory = AppViewModelProvider.Factory)
+    val membership by verificationViewModel.membership.collectAsStateWithLifecycle()
+
+    LaunchedEffect(currentUser?.id) {
+        if (currentUser != null) verificationViewModel.load()
+    }
 
     LaunchedEffect(notificationDestination, isAuthReady, currentUser?.id) {
         if (notificationDestination != null && isAuthReady && currentUser != null) {
@@ -84,14 +92,21 @@ fun CampusApp(
                 onInboxClick = { navController.navigate("inbox") },
                 onClaimsClick = { navController.navigate("claims") },
                 onSettingsClick = { navController.navigate("settings") },
-                onModerationClick = { navController.navigate("moderation") }
+                onModerationClick = { navController.navigate("moderation") },
+                membershipStatus = membership.status,
+                onVerificationClick = { navController.navigate("verification") }
             )
+        }
+        composable("verification") {
+            VerificationScreen(verificationViewModel) { navController.popBackStack() }
         }
         composable("create_listing") {
             val createItemViewModel: CreateItemViewModel = viewModel(factory = AppViewModelProvider.Factory)
             CreateListingScreen(
                 viewModel = createItemViewModel,
                 userId = currentUser?.id ?: "",
+                canReport = membership.canAct,
+                onVerifyClick = { navController.navigate("verification") },
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -122,7 +137,7 @@ fun CampusApp(
         }
         composable("moderation") {
             val moderationViewModel: ModerationViewModel = viewModel(factory = AppViewModelProvider.Factory)
-            ModerationScreen(currentUser?.id ?: "", moderationViewModel) { navController.popBackStack() }
+            ModerationScreen(currentUser?.id ?: "", moderationViewModel, verificationViewModel) { navController.popBackStack() }
         }
         composable("inbox") {
             val inboxViewModel: InboxViewModel = viewModel(factory = AppViewModelProvider.Factory)
