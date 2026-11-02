@@ -70,8 +70,8 @@
         "FIREBASE_PROJECT_NUMBER": "844398747634",
         "FIREBASE_APP_IDS": "1:844398747634:android:fadeda773c8800078e556b,1:844398747634:web:a763726255f3db478e556b",
         "CLOUDINARY_CLOUD_NAME": "campuslostandfound",
-        "WEB_APP_URL": "https://example.invalid",
-        "CORS_ORIGINS": "https://example.invalid"
+        "WEB_APP_URL": "https://cbu-find-web-production.leokmabuku.workers.dev",
+        "CORS_ORIGINS": "https://cbu-find-web-production.leokmabuku.workers.dev"
       },
       "ratelimits": [
         { "name": "GENERAL_RATE_LIMITER", "namespace_id": "31201", "simple": { "limit": 120, "period": 60 } },

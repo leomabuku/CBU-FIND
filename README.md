@@ -22,7 +22,7 @@ Phone-number/SMS authentication and unsigned Cloudinary uploads are not supporte
 ## Architecture
 
 - `app/` — Android, Kotlin, Jetpack Compose, API 36, JDK 17
-- `web/` — responsive Vinext/React client hosted on Cloudflare Workers
+- `web/` — responsive Vinext/React client hosted on Cloudflare Workers; the desktop and iOS-facing app (see `docs/WEB_APP_CONNECTION.md`)
 - `worker/` — Hono/Zod/JOSE trusted API, rate limits, queues, FCM, signed Cloudinary operations
 - `packages/contracts/` — shared TypeScript response and data contracts
 - `firestore.rules` / `firestore.indexes.json` — real-time read authorization and indexes
